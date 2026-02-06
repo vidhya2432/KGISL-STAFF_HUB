@@ -205,6 +205,67 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     aiFeedback: null
   }))) : [];
 
+  const handleRosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsRosterUploading(true);
+    try {
+      if (file.type.includes('spreadsheet') || file.type.includes('excel')) {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const rowData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]) as any[];
+        
+        const students = rowData.map(r => {
+          // Try common column names
+          const name = r.Name || r.name || r['Student Name'] || r['Full Name'] || 'Unknown';
+          const roll = r.Roll || r.roll || r['Roll No'] || r['Roll Number'] || r.ID || r.id || 'N/A';
+          return {
+            id: Math.random().toString(36).substr(2, 9),
+            name: String(name),
+            roll: String(roll)
+          };
+        });
+        saveRoster([...roster, ...students]);
+        toast({ title: 'Roster Imported', description: `Added ${students.length} students from Excel.` });
+      } else {
+        let content = '';
+        let isImage = false;
+
+        if (file.type === 'application/pdf') {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            content += textContent.items.map((item: any) => item.str).join(' ') + '\n';
+          }
+        } else {
+          const reader = new FileReader();
+          content = await new Promise<string>(r => { reader.onload = () => r(reader.result as string); reader.readAsDataURL(file); });
+          isImage = true;
+        }
+
+        const response = await extractRosterAction(content, isImage);
+        if (response.success && response.data) {
+          const students = response.data.map((s: any) => ({
+            id: Math.random().toString(36).substr(2, 9),
+            name: s.name,
+            roll: s.rollNumber
+          }));
+          saveRoster([...roster, ...students]);
+          toast({ title: 'AI Extraction Success', description: `Extracted ${students.length} students.` });
+        } else {
+          throw new Error(response.error);
+        }
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Upload Failed', description: error.message || 'Failed to process file.' });
+    } finally {
+      setIsRosterUploading(false);
+      if (rosterFileInputRef.current) rosterFileInputRef.current.value = '';
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="syllabus">
@@ -285,25 +346,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <CardTitle>Student Directory</CardTitle>
                 <CardDescription>Populate the roster for automated tracking.</CardDescription>
               </div>
-              <input type="file" accept=".xlsx,.xls,.pdf,image/*" className="hidden" ref={rosterFileInputRef} onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setIsRosterUploading(true);
-                try {
-                  if (file.type.includes('spreadsheet') || file.type.includes('excel')) {
-                    const data = await file.arrayBuffer();
-                    const workbook = XLSX.read(data);
-                    const rowData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]) as any[];
-                    const students = rowData.map(r => ({ id: Math.random().toString(36).substr(2, 9), name: r.Name || r.name || 'Unknown', roll: r.Roll || r.roll || 'N/A' }));
-                    saveRoster([...roster, ...students]);
-                  } else {
-                    // Simulating AI extraction for PDF/Image
-                    const students = [{ id: 's-new-1', name: 'John Doe', roll: 'CS-405' }, { id: 's-new-2', name: 'Jane Smith', roll: 'CS-406' }];
-                    saveRoster([...roster, ...students]);
-                  }
-                  toast({ title: 'Roster Updated' });
-                } finally { setIsRosterUploading(false); }
-              }} />
+              <input 
+                type="file" 
+                accept=".xlsx,.xls,.pdf,image/*" 
+                className="hidden" 
+                ref={rosterFileInputRef} 
+                onChange={handleRosterUpload} 
+              />
               <Button variant="secondary" onClick={() => rosterFileInputRef.current?.click()} disabled={isRosterUploading}>
                 {isRosterUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
                 Import Roster
@@ -326,6 +375,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                         <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
                       </TableRow>
                     ))}
+                    {roster.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
+                          No students in roster. Use the fields above or Import Roster.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>
