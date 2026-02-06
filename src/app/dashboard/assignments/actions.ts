@@ -1,3 +1,4 @@
+
 'use server';
 
 import { detectPlagiarism, DetectPlagiarismInput } from '@/ai/flows/detect-plagiarism-in-submissions';
@@ -68,4 +69,52 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
       data: null,
     };
   }
+}
+
+export async function syncFromDriveAction(classId: string, assignmentId: string) {
+  // Simulate an API call to Google Drive
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  // Mock data representing what might be found in a Google Drive folder
+  const mockStudents = [
+    { id: 'S1', name: 'Alice Johnson', roll: 'CS001' },
+    { id: 'S2', name: 'Bob Williams', roll: 'CS002' },
+    { id: 'S3', name: 'Charlie Brown', roll: 'CS003' },
+    { id: 'S4', name: 'Diana Miller', roll: 'CS004' },
+    { id: 'S5', name: 'Ethan Davis', roll: 'CS005' },
+  ];
+
+  const syncResults = mockStudents.map((student) => {
+    const hasSubmitted = Math.random() > 0.2;
+    if (!hasSubmitted) {
+      return {
+        studentId: student.id,
+        studentName: student.name,
+        rollNumber: student.roll,
+        status: 'Pending',
+        submittedAt: null,
+        marks: null,
+        plagiarismScore: null,
+      };
+    }
+
+    const isLate = Math.random() > 0.8;
+    const marks = Math.floor(Math.random() * 40) + 60;
+    const plagiarismScore = Math.random() * 0.3; // Low plagiarism usually
+
+    return {
+      studentId: student.id,
+      studentName: student.name,
+      rollNumber: student.roll,
+      status: isLate ? 'Late' : 'Submitted',
+      submittedAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
+      marks,
+      plagiarismScore,
+    };
+  });
+
+  return {
+    success: true,
+    data: syncResults,
+  };
 }

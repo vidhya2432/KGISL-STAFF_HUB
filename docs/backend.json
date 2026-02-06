@@ -25,6 +25,35 @@
         "location": { "type": "string" }
       },
       "required": ["id", "classId", "day", "time", "course"]
+    },
+    "Assignment": {
+      "title": "Assignment",
+      "description": "An assignment task created for a specific class.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string", "format": "date" }
+      },
+      "required": ["id", "classId", "title", "dueDate"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "A student's submission for an assignment.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "assignmentId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "rollNumber": { "type": "string" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "marks": { "type": "number" },
+        "plagiarismScore": { "type": "number" },
+        "status": { "type": "string", "enum": ["Submitted", "Pending", "Late"] }
+      },
+      "required": ["id", "assignmentId", "studentId"]
     }
   },
   "auth": {
@@ -38,6 +67,14 @@
     "/classes/{classId}/schedule/{entryId}": {
       "schema": "TimetableEntry",
       "description": "Timetable entries for a specific class."
+    },
+    "/classes/{classId}/assignments/{assignmentId}": {
+      "schema": "Assignment",
+      "description": "Assignments for a specific class."
+    },
+    "/classes/{classId}/assignments/{assignmentId}/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Student submissions for an assignment."
     }
   }
 }
