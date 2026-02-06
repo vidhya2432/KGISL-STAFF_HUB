@@ -44,7 +44,8 @@ import {
   Users2,
   User,
   Download,
-  ClipboardList
+  ClipboardList,
+  AlertCircle
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
@@ -106,6 +107,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [driveLink, setDriveLink] = useState('');
   const [isDriveDialogOpen, setIsDriveDialogOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<StudentSubmission | null>(null);
+  const [hideGenerationResult, setHideGenerationResult] = useState(false);
   
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentRoll, setNewStudentRoll] = useState('');
@@ -138,6 +140,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const savedSubmissions = localStorage.getItem(`submissions_${classId}`);
     if (savedSubmissions) setSubmissionsMap(JSON.parse(savedSubmissions));
     else setSubmissionsMap({});
+
+    setHideGenerationResult(false);
   }, [classId]);
 
   const saveRoster = (newRoster: Student[]) => {
@@ -167,6 +171,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       }
       return;
     }
+
+    setHideGenerationResult(false);
 
     const count = assignmentGrouping === 'Individual' 
       ? roster.length 
@@ -225,7 +231,12 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const updated = [...assignments, newAssignment];
     saveAssignments(updated);
     setActiveAssignmentId(newAssignment.id);
-    toast({ title: 'Assignment Finalized', description: `Assigned ${mappings.length} unique topics to your class.` });
+    setHideGenerationResult(true);
+    
+    toast({ 
+      title: 'Assignment Finalized', 
+      description: `Assigned ${mappings.length} unique topics. View them in the Grading Hub.` 
+    });
   };
 
   const downloadAssignmentSheet = (assignment: Assignment) => {
@@ -375,17 +386,19 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const activeAssignment = assignments.find(a => a.id === activeAssignmentId);
-  const activeSubmissions = activeAssignmentId ? (submissionsMap[activeAssignmentId] || roster.map(s => ({
-    studentId: s.id,
-    studentName: s.name,
-    rollNumber: s.roll,
-    status: 'Pending',
-    submittedAt: null,
-    marks: null,
-    plagiarismScore: null,
-    fileName: null,
-    aiFeedback: null
-  }))) : [];
+  const activeSubmissions = activeAssignmentId ? (submissionsMap[activeAssignmentId] || (
+    activeAssignment?.grouping === 'Individual' ? roster.map(s => ({
+      studentId: s.id,
+      studentName: s.name,
+      rollNumber: s.roll,
+      status: 'Pending',
+      submittedAt: null,
+      marks: null,
+      plagiarismScore: null,
+      fileName: null,
+      aiFeedback: null
+    })) : [] // Teams are harder to auto-gen without sync
+  )) : [];
 
   return (
     <div className="space-y-6">
@@ -490,14 +503,17 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             </CardContent>
           </Card>
 
-          {suggestionState.data?.suggestedAssignments && (
-            <Card className="border-primary/50 shadow-md">
+          {!hideGenerationResult && suggestionState.data?.suggestedAssignments && (
+            <Card className="border-primary/50 shadow-md animate-in zoom-in-95 duration-200">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-primary flex items-center gap-2"><ClipboardList className="h-5 w-5" /> Generated Topic Distribution</CardTitle>
                   <CardDescription>AI has created unique topics for your class size.</CardDescription>
                 </div>
-                <Button onClick={finalizeAssignment}>Confirm & Save to Roster</Button>
+                <Button onClick={finalizeAssignment} className="bg-primary hover:bg-primary/90">
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Confirm & Save to Class
+                </Button>
               </CardHeader>
               <CardContent>
                 <div className="rounded-md border max-h-[300px] overflow-auto">
@@ -515,17 +531,20 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           )}
 
           {assignments.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-bold">Recent Distribution Sheets</h3>
+            <div className="space-y-4 pt-6 border-t">
+              <h3 className="font-bold flex items-center gap-2"><Layers className="h-4 w-4" /> Active Class Assignments</h3>
               <div className="grid gap-3">
                 {assignments.map(a => (
-                  <Card key={a.id} className="hover:bg-muted/30 transition-colors">
+                  <Card key={a.id} className="hover:bg-muted/30 transition-colors border-l-4 border-l-primary">
                     <CardContent className="p-4 flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="bg-primary/10 p-2 rounded-full"><FileSpreadsheet className="h-5 w-5 text-primary" /></div>
                         <div>
                           <p className="font-bold text-sm">{a.title}</p>
-                          <p className="text-xs text-muted-foreground">{(a.mappings || []).length} {a.grouping} Topics Assigned</p>
+                          <p className="text-xs text-muted-foreground flex gap-2 items-center">
+                            <Badge variant="outline" className="text-[10px] h-4">{a.type}</Badge>
+                            <span>{(a.mappings || []).length} {a.grouping} Topics Assigned</span>
+                          </p>
                         </div>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => downloadAssignmentSheet(a)}><Download className="h-4 w-4 mr-2" /> Download Mapping</Button>
@@ -608,39 +627,47 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
               </div>
             </CardHeader>
             <CardContent>
-              {activeAssignment && (
-                <div className="mb-4 flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1"><Layers className="h-3 w-3" /> {activeAssignment.type}</Badge>
-                  <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">{activeAssignment.grouping === 'Individual' ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />} {activeAssignment.grouping}</Badge>
+              {!activeAssignmentId ? (
+                <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg bg-muted/20">
+                  <AlertCircle className="h-12 w-12 text-muted-foreground opacity-20 mb-4" />
+                  <p className="text-muted-foreground">Select an assignment to view submissions and start grading.</p>
                 </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1"><Layers className="h-3 w-3" /> {activeAssignment?.type}</Badge>
+                    <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">{activeAssignment?.grouping === 'Individual' ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />} {activeAssignment?.grouping}</Badge>
+                    <Badge variant="outline" className="px-3 py-1">{activeSubmissions.length} Total Entries</Badge>
+                  </div>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{activeAssignment?.grouping === 'Individual' ? 'Student' : 'Team / Members'}</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>AI Plagiarism</TableHead>
+                          <TableHead className="text-right">Grade & Feedback</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {activeSubmissions.map(sub => (
+                          <TableRow key={sub.studentId}>
+                            <TableCell><div><p className="font-bold">{sub.studentName}</p><p className="text-xs text-muted-foreground font-mono">{sub.rollNumber}</p></div></TableCell>
+                            <TableCell><Badge variant={sub.status === 'Submitted' ? 'secondary' : sub.status === 'Late' ? 'destructive' : 'outline'}>{sub.status}</Badge></TableCell>
+                            <TableCell>{sub.plagiarismScore !== null && <div className="flex items-center gap-2"><Progress value={sub.plagiarismScore * 100} className="w-[60px] h-2" /><span className="text-[10px]">{(sub.plagiarismScore * 100).toFixed(0)}%</span></div>}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {sub.marks && <span className="font-bold text-primary">{sub.marks}%</span>}
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedSubmission(sub)} disabled={!sub.fileName}><FileSearch className="h-4 w-4" /></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>AI Plagiarism</TableHead>
-                      <TableHead className="text-right">Grade & Feedback</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeSubmissions.map(sub => (
-                      <TableRow key={sub.studentId}>
-                        <TableCell><div><p className="font-bold">{sub.studentName}</p><p className="text-xs text-muted-foreground font-mono">{sub.rollNumber}</p></div></TableCell>
-                        <TableCell><Badge variant={sub.status === 'Submitted' ? 'secondary' : sub.status === 'Late' ? 'destructive' : 'outline'}>{sub.status}</Badge></TableCell>
-                        <TableCell>{sub.plagiarismScore !== null && <div className="flex items-center gap-2"><Progress value={sub.plagiarismScore * 100} className="w-[60px] h-2" /><span className="text-[10px]">{(sub.plagiarismScore * 100).toFixed(0)}%</span></div>}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {sub.marks && <span className="font-bold text-primary">{sub.marks}%</span>}
-                            <Button variant="ghost" size="icon" onClick={() => setSelectedSubmission(sub)} disabled={!sub.fileName}><FileSearch className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
