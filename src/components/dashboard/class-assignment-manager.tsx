@@ -541,10 +541,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                         <div className="bg-primary/10 p-2 rounded-full"><FileSpreadsheet className="h-5 w-5 text-primary" /></div>
                         <div>
                           <p className="font-bold text-sm">{a.title}</p>
-                          <p className="text-xs text-muted-foreground flex gap-2 items-center">
+                          <div className="text-xs text-muted-foreground flex gap-2 items-center">
                             <Badge variant="outline" className="text-[10px] h-4">{a.type}</Badge>
                             <span>{(a.mappings || []).length} {a.grouping} Topics Assigned</span>
-                          </p>
+                          </div>
                         </div>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => downloadAssignmentSheet(a)}><Download className="h-4 w-4 mr-2" /> Download Mapping</Button>
