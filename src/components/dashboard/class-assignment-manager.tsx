@@ -195,7 +195,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         mappings.push({
           assigneeName: student.name,
           assigneeId: student.roll,
-          topic: topics[index] || topics[topics.length - 1]
+          topic: topics[index] || topics[topics.length - 1] || 'TBD'
         });
       });
     } else {
@@ -207,7 +207,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         mappings.push({
           assigneeName: `${teamName} (${teamMembers.map(m => m.name).join(', ')})`,
           assigneeId: teamIds,
-          topic: topics[Math.floor(i / teamSize)] || topics[topics.length - 1]
+          topic: topics[Math.floor(i / teamSize)] || topics[topics.length - 1] || 'TBD'
         });
       }
     }
@@ -229,9 +229,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const downloadAssignmentSheet = (assignment: Assignment) => {
+    const mappings = assignment.mappings || [];
     const csvContent = [
       ["Assignee (Student/Team)", "ID/Roll Numbers", "Assigned Topic"],
-      ...assignment.mappings.map(m => [m.assigneeName, m.assigneeId, m.topic])
+      ...mappings.map(m => [m.assigneeName, m.assigneeId, m.topic])
     ].map(e => e.join(",")).join("\n");
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -524,7 +525,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                         <div className="bg-primary/10 p-2 rounded-full"><FileSpreadsheet className="h-5 w-5 text-primary" /></div>
                         <div>
                           <p className="font-bold text-sm">{a.title}</p>
-                          <p className="text-xs text-muted-foreground">{a.mappings.length} {a.grouping} Topics Assigned</p>
+                          <p className="text-xs text-muted-foreground">{(a.mappings || []).length} {a.grouping} Topics Assigned</p>
                         </div>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => downloadAssignmentSheet(a)}><Download className="h-4 w-4 mr-2" /> Download Mapping</Button>
