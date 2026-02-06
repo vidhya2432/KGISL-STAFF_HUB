@@ -210,21 +210,37 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     if (!file) return;
     setIsRosterUploading(true);
     try {
-      if (file.type.includes('spreadsheet') || file.type.includes('excel')) {
+      if (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data);
         const rowData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]) as any[];
         
+        if (rowData.length === 0) {
+          throw new Error('The spreadsheet appears to be empty.');
+        }
+
+        // Robust column detection
+        const keys = Object.keys(rowData[0]);
+        const nameKey = keys.find(k => {
+          const low = k.toLowerCase().replace(/[^a-z]/g, '');
+          return low.includes('name') || low.includes('student') || low.includes('full');
+        });
+        const rollKey = keys.find(k => {
+          const low = k.toLowerCase().replace(/[^a-z]/g, '');
+          return low.includes('roll') || low.includes('id') || low.includes('no') || low.includes('number');
+        });
+
         const students = rowData.map(r => {
-          // Try common column names
-          const name = r.Name || r.name || r['Student Name'] || r['Full Name'] || 'Unknown';
-          const roll = r.Roll || r.roll || r['Roll No'] || r['Roll Number'] || r.ID || r.id || 'N/A';
+          const nameVal = nameKey ? r[nameKey] : null;
+          const rollVal = rollKey ? r[rollKey] : null;
+          
           return {
             id: Math.random().toString(36).substr(2, 9),
-            name: String(name),
-            roll: String(roll)
+            name: nameVal ? String(nameVal).trim() : 'Unknown',
+            roll: rollVal ? String(rollVal).trim() : 'N/A'
           };
-        });
+        }).filter(s => s.name !== 'Unknown' || s.roll !== 'N/A');
+
         saveRoster([...roster, ...students]);
         toast({ title: 'Roster Imported', description: `Added ${students.length} students from Excel.` });
       } else {
