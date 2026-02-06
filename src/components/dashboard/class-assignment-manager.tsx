@@ -34,7 +34,6 @@ import {
   Users, 
   Loader2,
   Upload,
-  Image as ImageIcon,
   FileSearch,
   Plus,
   Trash2,
@@ -102,7 +101,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     data: null,
   });
 
-  // Load class data
   useEffect(() => {
     const savedRoster = localStorage.getItem(`roster_${classId}`);
     if (savedRoster) setRoster(JSON.parse(savedRoster));
@@ -121,8 +119,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const savedSubmissions = localStorage.getItem(`submissions_${classId}`);
     if (savedSubmissions) setSubmissionsMap(JSON.parse(savedSubmissions));
     else setSubmissionsMap({});
-
-    setDriveLink('');
   }, [classId]);
 
   const saveRoster = (newRoster: Student[]) => {
@@ -174,7 +170,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       if (response.success && response.data) {
         const newMap = { ...submissionsMap, [activeAssignmentId]: response.data };
         saveSubmissions(newMap);
-        toast({ title: 'Analysis Complete', description: `Graded ${roster.length} students for the selected assignment.` });
+        toast({ title: 'Analysis Complete', description: `Processed ${roster.length} students.` });
       }
     } catch (error) {
       toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not analyze files.' });
@@ -210,63 +206,60 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     if (!file) return;
     setIsRosterUploading(true);
     try {
-      if (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      if (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
         const dataBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(dataBuffer);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
         
-        if (rows.length === 0) {
-          throw new Error('The spreadsheet appears to be empty.');
-        }
+        if (!rows || rows.length === 0) throw new Error('File is empty.');
 
-        let headerRowIndex = -1;
-        let nameColIndex = -1;
-        let rollColIndex = -1;
+        let nameColIdx = -1;
+        let rollColIdx = -1;
+        let headerRowIdx = -1;
 
-        // Smart scan for headers in first 10 rows
-        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        // More aggressive header detection
+        for (let i = 0; i < Math.min(rows.length, 20); i++) {
           const row = rows[i];
-          if (!row || !Array.isArray(row)) continue;
-          
+          if (!row) continue;
           for (let j = 0; j < row.length; j++) {
-            const cellVal = String(row[j] || '').toLowerCase().replace(/[^a-z]/g, '');
-            if (cellVal.includes('name') || cellVal.includes('student') || cellVal.includes('full')) nameColIndex = j;
-            if (cellVal.includes('roll') || cellVal.includes('id') || cellVal.includes('no') || cellVal.includes('number')) rollColIndex = j;
+            const val = String(row[j] || '').toLowerCase();
+            if (val.includes('name') || val.includes('student')) nameColIdx = j;
+            if (val.includes('roll') || val.includes('no') || val.includes('id') || val.includes('number')) rollColIdx = j;
           }
-          
-          if (nameColIndex !== -1 || rollColIndex !== -1) {
-            headerRowIndex = i;
+          if (nameColIdx !== -1 || rollColIdx !== -1) {
+            headerRowIdx = i;
             break;
           }
         }
 
-        // Fallback: If no headers found, use first row and guess column positions
-        if (headerRowIndex === -1) {
-          headerRowIndex = -1; // Start from 0
-          rollColIndex = 0;
-          nameColIndex = rows[0]?.length > 1 ? 1 : 0;
+        // Fallback: If no headers found, guess columns 0 and 1
+        if (headerRowIdx === -1) {
+          headerRowIdx = -1; 
+          rollColIdx = 0;
+          nameColIdx = rows[0]?.length > 1 ? 1 : 0;
         }
 
-        const students = rows.slice(headerRowIndex + 1)
-          .map(row => {
-            const nameVal = nameColIndex !== -1 ? String(row[nameColIndex] || '').trim() : '';
-            const rollVal = rollColIndex !== -1 ? String(row[rollColIndex] || '').trim() : '';
-            
-            if (!nameVal && !rollVal) return null;
-            
-            return {
+        const extractedStudents: Student[] = [];
+        for (let i = headerRowIdx + 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.every(cell => !cell)) continue;
+          
+          const rollValue = String(row[rollColIdx] || '').trim();
+          const nameValue = String(row[nameColIdx] || '').trim();
+          
+          if (rollValue || nameValue) {
+            extractedStudents.push({
               id: Math.random().toString(36).substr(2, 9),
-              name: nameVal || 'Unknown Student',
-              roll: rollVal || 'N/A'
-            };
-          })
-          .filter((s): s is Student => s !== null && (s.name !== 'Unknown Student' || s.roll !== 'N/A'));
+              roll: rollValue || 'N/A',
+              name: nameValue || 'Unknown Student'
+            });
+          }
+        }
 
-        if (students.length === 0) throw new Error('Could not extract student data. Please check your file headers.');
-
-        saveRoster([...roster, ...students]);
-        toast({ title: 'Roster Imported', description: `Added ${students.length} students from Excel.` });
+        if (extractedStudents.length === 0) throw new Error('Could not find any student data in the file.');
+        saveRoster([...roster, ...extractedStudents]);
+        toast({ title: 'Roster Updated', description: `Successfully imported ${extractedStudents.length} students.` });
       } else {
         // AI extraction for PDF/Images
         let content = '';
@@ -328,8 +321,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   setIsExtracting(true);
-                  if (file.type === 'application/pdf') {
-                    const text = await (async () => {
+                  try {
+                    if (file.type === 'application/pdf') {
                       const arrayBuffer = await file.arrayBuffer();
                       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                       let fullText = '';
@@ -338,21 +331,23 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                         const content = await page.getTextContent();
                         fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
                       }
-                      return fullText;
-                    })();
-                    setSyllabusInput(text);
-                    setIsImageUpload(false);
-                  } else {
-                    const reader = new FileReader();
-                    const dataUri = await new Promise<string>(r => { reader.onload = () => r(reader.result as string); reader.readAsDataURL(file); });
-                    setSyllabusInput(dataUri);
-                    setIsImageUpload(true);
+                      setSyllabusInput(fullText);
+                      setIsImageUpload(false);
+                    } else {
+                      const reader = new FileReader();
+                      const dataUri = await new Promise<string>(r => { reader.onload = () => r(reader.result as string); reader.readAsDataURL(file); });
+                      setSyllabusInput(dataUri);
+                      setIsImageUpload(true);
+                    }
+                  } catch (err) {
+                    toast({ variant: 'destructive', title: 'Upload Error', description: 'Failed to read file.' });
+                  } finally {
+                    setIsExtracting(false);
                   }
-                  setIsExtracting(false);
                 }} />
                 <Button variant="outline" className="w-full" onClick={() => syllabusFileInputRef.current?.click()} disabled={isExtracting}>
                   {isExtracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Upload Syllabus
+                  Upload Syllabus (PDF/IMG)
                 </Button>
               </div>
               <Textarea placeholder="Or paste syllabus here..." className="min-h-[100px]" value={syllabusInput} onChange={(e) => setSyllabusInput(e.target.value)} />
@@ -389,7 +384,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
               </div>
               <input 
                 type="file" 
-                accept=".xlsx,.xls,.pdf,image/*" 
+                accept=".xlsx,.xls,.csv,.pdf,image/*" 
                 className="hidden" 
                 ref={rosterFileInputRef} 
                 onChange={handleRosterUpload} 
@@ -405,15 +400,25 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <Input placeholder="Full Name" className="flex-1" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} />
                 <Button variant="outline" onClick={addStudent}><Plus className="h-4 w-4" /></Button>
               </div>
-              <div className="rounded-md border">
+              <div className="rounded-md border max-h-[400px] overflow-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Roll No</TableHead><TableHead>Name</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Roll No</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {roster.map(s => (
                       <TableRow key={s.id}>
                         <TableCell className="font-mono">{s.roll}</TableCell>
                         <TableCell className="font-medium">{s.name}</TableCell>
-                        <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {roster.length === 0 && (
@@ -496,6 +501,9 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                       ))}
                       {assignments.length === 0 && (
                         <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">No assignments created yet. Go to Syllabus tab to generate tasks.</TableCell></TableRow>
+                      )}
+                      {assignments.length > 0 && roster.length === 0 && (
+                        <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">Roster is empty. Import students in the Roster tab first.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
