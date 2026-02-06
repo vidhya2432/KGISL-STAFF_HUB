@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import {
   Bell,
   Home,
@@ -40,7 +41,12 @@ const pageTitles: { [key: string]: string } = {
 
 export function Header() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
   const userAvatar = PlaceHolderImages.find((img) => img.id === 'user-avatar-1');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-card px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
@@ -49,32 +55,36 @@ export function Header() {
          <h1 className="text-2xl font-semibold font-headline">{pageTitles[pathname] || 'AcademiaLink'}</h1>
       </div>
       <div className="flex items-center gap-4 md:ml-auto md:grow-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="overflow-hidden rounded-full"
-            >
-              <Image
-                src={userAvatar?.imageUrl || '/placeholder.svg'}
-                width={40}
-                height={40}
-                alt={userAvatar?.description || 'User avatar'}
-                data-ai-hint={userAvatar?.imageHint}
+        {mounted ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
                 className="overflow-hidden rounded-full"
-              />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Settings</DropdownMenuItem>
-            <DropdownMenuItem>Support</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Logout</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              >
+                <Image
+                  src={userAvatar?.imageUrl || '/placeholder.svg'}
+                  width={40}
+                  height={40}
+                  alt={userAvatar?.description || 'User avatar'}
+                  data-ai-hint={userAvatar?.imageHint}
+                  className="overflow-hidden rounded-full"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Settings</DropdownMenuItem>
+              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Logout</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+        )}
       </div>
     </header>
   );
