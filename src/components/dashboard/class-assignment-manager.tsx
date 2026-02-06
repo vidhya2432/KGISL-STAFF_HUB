@@ -221,68 +221,74 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         let rollColIdx = -1;
         let headerRowIdx = -1;
 
-        // 1. SMART HEADER SEARCH
+        // Keywords for smart detection
         const nameKeywords = ['name', 'student', 'candidate', 'full name', 'member'];
-        const rollKeywords = ['roll', 'no', 'id', 'number', 'reg', 'code', 'enrollment', 'uax', 'uad'];
+        const rollKeywords = ['roll', 'registration', 'reg', 'enrol', 'uax', 'uad', 'admission', 'id'];
+        const skipKeywords = ['s.no', 'sno', 'sl.no', 'serial', 'index'];
 
+        // 1. SCAN FOR HEADERS (Searching deeper if needed)
         for (let i = 0; i < Math.min(rows.length, 30); i++) {
           const row = rows[i];
           if (!row || row.length < 2) continue;
           
+          let potentialNameIdx = -1;
+          let potentialRollIdx = -1;
+
           for (let j = 0; j < row.length; j++) {
             const val = String(row[j] || '').toLowerCase().trim();
             if (val === '') continue;
 
-            if (nameColIdx === -1 && nameKeywords.some(k => val.includes(k))) nameColIdx = j;
-            if (rollColIdx === -1 && rollKeywords.some(k => val.includes(k))) rollColIdx = j;
+            // Specifically avoid S.No columns
+            if (skipKeywords.some(k => val === k || val.startsWith(k))) continue;
+
+            if (potentialNameIdx === -1 && nameKeywords.some(k => val.includes(k))) potentialNameIdx = j;
+            if (potentialRollIdx === -1 && rollKeywords.some(k => val.includes(k))) potentialRollIdx = j;
           }
 
-          if (nameColIdx !== -1 && rollColIdx !== -1) {
+          if (potentialNameIdx !== -1 || potentialRollIdx !== -1) {
+            nameColIdx = potentialNameIdx;
+            rollColIdx = potentialRollIdx;
             headerRowIdx = i;
             break;
           }
         }
 
-        // 2. DATA PATTERN FALLBACK (If headers not found)
+        // 2. FALLBACK PATTERN DETECTION (If headers aren't clear)
         if (nameColIdx === -1 || rollColIdx === -1) {
           for (let i = 0; i < Math.min(rows.length, 20); i++) {
             const row = rows[i];
             if (!row || row.length < 2) continue;
 
-            // Look for a row that has a potential ID and a Name
-            let potentialRoll = -1;
-            let potentialName = -1;
+            let colCandidates: { idx: number; type: 'serial' | 'roll' | 'name' }[] = [];
 
             for (let j = 0; j < row.length; j++) {
               const val = String(row[j] || '').trim();
               if (val.length === 0) continue;
 
-              // Pattern for Roll No: contains digits, short, or alphanumeric
+              const isSequentialInt = /^\d+$/.test(val) && parseInt(val) < 100;
               const hasDigits = /\d/.test(val);
-              const isShort = val.length < 15;
-              const looksLikeId = (hasDigits && isShort) || /^[A-Z0-9]+$/.test(val);
-
-              // Pattern for Name: alphabetic, usually longer
               const isAlpha = /^[a-zA-Z\s.]+$/.test(val);
-              const isNameLength = val.length > 3;
-
-              if (looksLikeId && potentialRoll === -1) potentialRoll = j;
-              else if (isAlpha && isNameLength && potentialName === -1) potentialName = j;
+              
+              if (isSequentialInt) colCandidates.push({ idx: j, type: 'serial' });
+              else if (hasDigits && val.length > 2) colCandidates.push({ idx: j, type: 'roll' });
+              else if (isAlpha && val.length > 3) colCandidates.push({ idx: j, type: 'name' });
             }
 
-            if (potentialRoll !== -1 && potentialName !== -1) {
-              rollColIdx = potentialRoll;
-              nameColIdx = potentialName;
-              headerRowIdx = i - 1; // Data starts at i
+            const bestName = colCandidates.find(c => c.type === 'name');
+            const bestRoll = colCandidates.find(c => c.type === 'roll');
+
+            if (bestName && bestRoll) {
+              nameColIdx = bestName.idx;
+              rollColIdx = bestRoll.idx;
+              headerRowIdx = i - 1;
               break;
             }
           }
         }
 
-        // 3. FINAL GUESS
-        if (rollColIdx === -1) rollColIdx = 0;
+        // Final Default Guess
         if (nameColIdx === -1) nameColIdx = 1;
-        if (headerRowIdx === -1) headerRowIdx = -1;
+        if (rollColIdx === -1) rollColIdx = 0;
 
         const extractedStudents: Student[] = [];
         const seen = new Set();
@@ -291,11 +297,11 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           const row = rows[i];
           if (!row) continue;
           
-          const rollValue = String(row[rollColIdx] || '').trim();
           const nameValue = String(row[nameColIdx] || '').trim();
+          const rollValue = String(row[rollColIdx] || '').trim();
           
-          // Skip if both are empty or looks like a header
-          if (!rollValue && !nameValue) continue;
+          if (!nameValue && !rollValue) continue;
+          // Skip rows that look like headers we found
           if (nameKeywords.includes(nameValue.toLowerCase())) continue;
 
           const key = `${rollValue}-${nameValue}`;
@@ -309,10 +315,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           });
         }
 
-        if (extractedStudents.length === 0) throw new Error('Could not extract any student data. Please check your file format.');
+        if (extractedStudents.length === 0) throw new Error('Could not extract any student data.');
         
         saveRoster([...roster, ...extractedStudents]);
-        toast({ title: 'Roster Updated', description: `Successfully imported ${extractedStudents.length} students.` });
+        toast({ title: 'Roster Updated', description: `Imported ${extractedStudents.length} students.` });
       } else {
         // AI extraction for PDF/Images
         let content = '';
