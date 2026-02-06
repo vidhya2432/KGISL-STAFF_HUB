@@ -30,7 +30,6 @@ import {
   Sparkles, 
   CloudDownload, 
   FileText, 
-  Users, 
   Loader2,
   Upload,
   FileSearch,
@@ -43,7 +42,9 @@ import {
   Eraser,
   Layers,
   Users2,
-  User
+  User,
+  Download,
+  ClipboardList
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
@@ -59,12 +60,20 @@ interface Student {
   roll: string;
 }
 
+interface AssignmentTopicMapping {
+  assigneeName: string; // Student Name or Team Name
+  assigneeId: string;   // Student Roll or Team ID
+  topic: string;
+}
+
 interface Assignment {
   id: string;
   title: string;
   type: string;
   grouping: 'Individual' | 'Team';
+  teamSize?: number;
   createdAt: string;
+  mappings: AssignmentTopicMapping[];
 }
 
 interface StudentSubmission {
@@ -84,6 +93,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [isImageUpload, setIsImageUpload] = useState(false);
   const [assignmentType, setAssignmentType] = useState<string>('');
   const [assignmentGrouping, setAssignmentGrouping] = useState<'Individual' | 'Team'>('Individual');
+  const [teamSize, setTeamSize] = useState<number>(3);
   
   const [roster, setRoster] = useState<Student[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -128,11 +138,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const savedSubmissions = localStorage.getItem(`submissions_${classId}`);
     if (savedSubmissions) setSubmissionsMap(JSON.parse(savedSubmissions));
     else setSubmissionsMap({});
-    
-    setSyllabusInput('');
-    setDriveLink('');
-    setAssignmentType('');
-    setAssignmentGrouping('Individual');
   }, [classId]);
 
   const saveRoster = (newRoster: Student[]) => {
@@ -155,18 +160,89 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     localStorage.setItem(`submissions_${classId}`, JSON.stringify(newMap));
   };
 
-  const handleAddAssignment = (title: string) => {
+  const handleSuggest = () => {
+    if (!syllabusInput.trim() || !assignmentType || roster.length === 0) {
+      if (roster.length === 0) {
+        toast({ variant: 'destructive', title: 'Roster Required', description: 'Please add students to the roster first so AI knows how many topics to generate.' });
+      }
+      return;
+    }
+
+    const count = assignmentGrouping === 'Individual' 
+      ? roster.length 
+      : Math.ceil(roster.length / teamSize);
+
+    const formData = new FormData();
+    formData.append('syllabusContent', syllabusInput);
+    formData.append('isImage', isImageUpload.toString());
+    formData.append('assignmentType', assignmentType);
+    formData.append('grouping', assignmentGrouping);
+    formData.append('count', count.toString());
+
+    startTransition(() => {
+      suggestionDispatch(formData);
+    });
+  };
+
+  const finalizeAssignment = () => {
+    if (!suggestionState.data?.suggestedAssignments) return;
+
+    const topics = suggestionState.data.suggestedAssignments;
+    const mappings: AssignmentTopicMapping[] = [];
+
+    if (assignmentGrouping === 'Individual') {
+      roster.forEach((student, index) => {
+        mappings.push({
+          assigneeName: student.name,
+          assigneeId: student.roll,
+          topic: topics[index] || topics[topics.length - 1]
+        });
+      });
+    } else {
+      // Grouping into teams
+      for (let i = 0; i < roster.length; i += teamSize) {
+        const teamMembers = roster.slice(i, i + teamSize);
+        const teamName = `Team ${Math.floor(i / teamSize) + 1}`;
+        const teamIds = teamMembers.map(m => m.roll).join(', ');
+        mappings.push({
+          assigneeName: `${teamName} (${teamMembers.map(m => m.name).join(', ')})`,
+          assigneeId: teamIds,
+          topic: topics[Math.floor(i / teamSize)] || topics[topics.length - 1]
+        });
+      }
+    }
+
     const newAssignment: Assignment = {
       id: Math.random().toString(36).substr(2, 9),
-      title,
+      title: `${assignmentType} - ${new Date().toLocaleDateString()}`,
       type: assignmentType,
       grouping: assignmentGrouping,
+      teamSize: assignmentGrouping === 'Team' ? teamSize : undefined,
       createdAt: new Date().toISOString(),
+      mappings
     };
+
     const updated = [...assignments, newAssignment];
     saveAssignments(updated);
-    if (!activeAssignmentId) setActiveAssignmentId(newAssignment.id);
-    toast({ title: 'Assignment Created', description: `"${title}" added as ${assignmentType} (${assignmentGrouping}).` });
+    setActiveAssignmentId(newAssignment.id);
+    toast({ title: 'Assignment Finalized', description: `Assigned ${mappings.length} unique topics to your class.` });
+  };
+
+  const downloadAssignmentSheet = (assignment: Assignment) => {
+    const csvContent = [
+      ["Assignee (Student/Team)", "ID/Roll Numbers", "Assigned Topic"],
+      ...assignment.mappings.map(m => [m.assigneeName, m.assigneeId, m.topic])
+    ].map(e => e.join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${assignment.title}_Distribution.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const addStudent = () => {
@@ -178,10 +254,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const handleSyncDrive = async () => {
-    if (!driveLink || !activeAssignmentId || roster.length === 0) {
-      toast({ variant: 'destructive', title: 'Action Required', description: 'Ensure assignment is selected, roster is set, and link is provided.' });
-      return;
-    }
+    if (!driveLink || !activeAssignmentId || roster.length === 0) return;
 
     setIsSyncing(true);
     setIsDriveDialogOpen(false);
@@ -199,30 +272,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       setIsSyncing(false);
     }
   };
-
-  const handleSuggest = () => {
-    if (!syllabusInput.trim() || !assignmentType) return;
-    const formData = new FormData();
-    formData.append('syllabusContent', syllabusInput);
-    formData.append('isImage', isImageUpload.toString());
-    formData.append('assignmentType', assignmentType);
-    formData.append('grouping', assignmentGrouping);
-    startTransition(() => {
-      suggestionDispatch(formData);
-    });
-  };
-
-  const activeSubmissions = activeAssignmentId ? (submissionsMap[activeAssignmentId] || roster.map(s => ({
-    studentId: s.id,
-    studentName: s.name,
-    rollNumber: s.roll,
-    status: 'Pending',
-    submittedAt: null,
-    marks: null,
-    plagiarismScore: null,
-    fileName: null,
-    aiFeedback: null
-  }))) : [];
 
   const handleRosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -271,76 +320,27 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        if (nameColIdx === -1 || rollColIdx === -1) {
-          for (let i = 0; i < Math.min(rows.length, 20); i++) {
-            const row = rows[i];
-            if (!row || row.length < 2) continue;
-
-            let colCandidates: { idx: number; type: 'serial' | 'roll' | 'name' | 'mobile' }[] = [];
-
-            for (let j = 0; j < row.length; j++) {
-              const val = String(row[j] || '').trim();
-              if (val.length === 0) continue;
-
-              const isSequentialInt = /^\d+$/.test(val) && parseInt(val) < 200;
-              const isMobile = /^\d{10}$/.test(val) || (val.length >= 10 && /^\d+$/.test(val));
-              const hasDigits = /\d/.test(val);
-              const isAlpha = /^[a-zA-Z\s.]+$/.test(val);
-              
-              if (isMobile) colCandidates.push({ idx: j, type: 'mobile' });
-              else if (isSequentialInt) colCandidates.push({ idx: j, type: 'serial' });
-              else if (hasDigits && val.length > 2) colCandidates.push({ idx: j, type: 'roll' });
-              else if (isAlpha && val.length > 3) colCandidates.push({ idx: j, type: 'name' });
-            }
-
-            const bestName = colCandidates.find(c => c.type === 'name');
-            const bestRoll = colCandidates.find(c => c.type === 'roll');
-
-            if (bestName && bestRoll) {
-              nameColIdx = bestName.idx;
-              rollColIdx = bestRoll.idx;
-              headerRowIdx = i - 1;
-              break;
-            }
-          }
-        }
-
         if (nameColIdx === -1) nameColIdx = 1;
         if (rollColIdx === -1) rollColIdx = 0;
 
         const extractedStudents: Student[] = [];
-        const seen = new Set();
-
         for (let i = headerRowIdx + 1; i < rows.length; i++) {
           const row = rows[i];
           if (!row) continue;
-          
           const nameValue = String(row[nameColIdx] || '').trim();
           const rollValue = String(row[rollColIdx] || '').trim();
-          
           if (!nameValue && !rollValue) continue;
-          if (nameKeywords.includes(nameValue.toLowerCase())) continue;
-          if (/^\d{10}$/.test(rollValue)) continue;
-
-          const key = `${rollValue}-${nameValue}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-
           extractedStudents.push({
             id: Math.random().toString(36).substr(2, 9),
             roll: rollValue || 'N/A',
-            name: nameValue || 'Unknown Student'
+            name: nameValue || 'Unknown'
           });
         }
-
-        if (extractedStudents.length === 0) throw new Error('Could not extract any student data.');
-        
         saveRoster(extractedStudents);
-        toast({ title: 'Roster Updated', description: `Imported ${extractedStudents.length} students to this class.` });
+        toast({ title: 'Roster Updated', description: `Imported ${extractedStudents.length} students.` });
       } else {
         let content = '';
         let isImage = false;
-
         if (file.type === 'application/pdf') {
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -354,7 +354,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           content = await new Promise<string>(r => { reader.onload = () => r(reader.result as string); reader.readAsDataURL(file); });
           isImage = true;
         }
-
         const response = await extractRosterAction(content, isImage);
         if (response.success && response.data) {
           const students = response.data.map((s: any) => ({
@@ -363,13 +362,11 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             roll: s.rollNumber
           }));
           saveRoster(students);
-          toast({ title: 'Roster Updated', description: `AI extracted ${students.length} students to this class.` });
-        } else {
-          throw new Error(response.error);
+          toast({ title: 'Roster Updated', description: `AI extracted ${students.length} students.` });
         }
       }
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Import Failed', description: error.message || 'Failed to process file.' });
+      toast({ variant: 'destructive', title: 'Import Failed', description: error.message });
     } finally {
       setIsRosterUploading(false);
       if (rosterFileInputRef.current) rosterFileInputRef.current.value = '';
@@ -377,6 +374,17 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const activeAssignment = assignments.find(a => a.id === activeAssignmentId);
+  const activeSubmissions = activeAssignmentId ? (submissionsMap[activeAssignmentId] || roster.map(s => ({
+    studentId: s.id,
+    studentName: s.name,
+    rollNumber: s.roll,
+    status: 'Pending',
+    submittedAt: null,
+    marks: null,
+    plagiarismScore: null,
+    fileName: null,
+    aiFeedback: null
+  }))) : [];
 
   return (
     <div className="space-y-6">
@@ -391,13 +399,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           <Card>
             <CardHeader>
               <CardTitle>AI Assignment Architect</CardTitle>
-              <CardDescription>Upload syllabus and select assignment details to generate tasks.</CardDescription>
+              <CardDescription>Generate unique topics for every student based on your syllabus.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Step 1: Upload Course Content</Label>
+                    <Label>Step 1: Upload Syllabus</Label>
                     <input type="file" accept=".pdf,image/*" className="hidden" ref={syllabusFileInputRef} onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
@@ -430,81 +438,100 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                       {isExtracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                       Upload Syllabus (PDF/IMG)
                     </Button>
-                    <Textarea placeholder="Or paste syllabus here..." className="min-h-[120px]" value={syllabusInput} onChange={(e) => setSyllabusInput(e.target.value)} />
+                    <Textarea placeholder="Paste syllabus text here..." className="min-h-[100px]" value={syllabusInput} onChange={(e) => setSyllabusInput(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Step 2: Choose Assignment Type</Label>
+                    <Label>Step 2: Assignment Details</Label>
                     <Select value={assignmentType} onValueChange={setAssignmentType}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type..." />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Case Study">Case Study</SelectItem>
                         <SelectItem value="Research Paper">Research Paper</SelectItem>
-                        <SelectItem value="Sums / Problem Set">Sums / Problem Set</SelectItem>
+                        <SelectItem value="Problem Set">Problem Set</SelectItem>
                         <SelectItem value="Essay">Essay</SelectItem>
-                        <SelectItem value="Practical Lab Report">Practical Lab Report</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {assignmentType && (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <Label>Step 3: Mode of Delivery</Label>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant={assignmentGrouping === 'Individual' ? 'default' : 'outline'} 
-                          className="flex-1"
-                          onClick={() => setAssignmentGrouping('Individual')}
-                        >
-                          <User className="mr-2 h-4 w-4" /> Individual
-                        </Button>
-                        <Button 
-                          variant={assignmentGrouping === 'Team' ? 'default' : 'outline'} 
-                          className="flex-1"
-                          onClick={() => setAssignmentGrouping('Team')}
-                        >
-                          <Users2 className="mr-2 h-4 w-4" /> Team
-                        </Button>
-                      </div>
+                  <div className="space-y-2">
+                    <Label>Step 3: Mode</Label>
+                    <div className="flex gap-2">
+                      <Button variant={assignmentGrouping === 'Individual' ? 'default' : 'outline'} className="flex-1" onClick={() => setAssignmentGrouping('Individual')}><User className="mr-2 h-4 w-4" /> Individual</Button>
+                      <Button variant={assignmentGrouping === 'Team' ? 'default' : 'outline'} className="flex-1" onClick={() => setAssignmentGrouping('Team')}><Users2 className="mr-2 h-4 w-4" /> Team</Button>
+                    </div>
+                  </div>
+
+                  {assignmentGrouping === 'Team' && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <Label>Students per Team</Label>
+                      <Input type="number" min={2} max={10} value={teamSize} onChange={(e) => setTeamSize(parseInt(e.target.value))} />
                     </div>
                   )}
                 </div>
               </div>
 
-              <Button 
-                onClick={handleSuggest} 
-                disabled={isSuggesting || syllabusInput.length < 5 || !assignmentType} 
-                className="w-full"
-              >
+              <div className="bg-muted/50 p-4 rounded-lg border border-dashed text-center">
+                <p className="text-sm font-medium">
+                  Current Class Size: <span className="text-primary font-bold">{roster.length} students</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  AI will generate {assignmentGrouping === 'Individual' ? roster.length : Math.ceil(roster.length / teamSize)} unique topics.
+                </p>
+              </div>
+
+              <Button onClick={handleSuggest} disabled={isSuggesting || roster.length === 0 || !assignmentType} className="w-full">
                 {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Generate {assignmentType || 'Assignment'} Suggestions
+                Generate & Assign Unique Topics
               </Button>
             </CardContent>
           </Card>
 
           {suggestionState.data?.suggestedAssignments && (
-            <div className="grid gap-4">
-              <h3 className="font-bold flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" /> AI Suggested Tasks ({assignmentType})</h3>
-              {suggestionState.data.suggestedAssignments.map((q: string, i: number) => (
-                <Card key={i} className="hover:border-primary/50 transition-colors">
-                  <CardContent className="p-4 flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{q}</p>
-                      <div className="flex gap-2 mt-1">
-                        <Badge variant="outline" className="text-[10px] h-4">{assignmentType}</Badge>
-                        <Badge variant="outline" className="text-[10px] h-4">{assignmentGrouping}</Badge>
+            <Card className="border-primary/50 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-primary flex items-center gap-2"><ClipboardList className="h-5 w-5" /> Generated Topic Distribution</CardTitle>
+                  <CardDescription>AI has created unique topics for your class size.</CardDescription>
+                </div>
+                <Button onClick={finalizeAssignment}>Confirm & Save to Roster</Button>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border max-h-[300px] overflow-auto">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Index</TableHead><TableHead>Suggested Topic</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {suggestionState.data.suggestedAssignments.map((topic: string, i: number) => (
+                        <TableRow key={i}><TableCell className="font-mono text-xs">{i + 1}</TableCell><TableCell className="text-sm">{topic}</TableCell></TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {assignments.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="font-bold">Recent Distribution Sheets</h3>
+              <div className="grid gap-3">
+                {assignments.map(a => (
+                  <Card key={a.id} className="hover:bg-muted/30 transition-colors">
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-primary/10 p-2 rounded-full"><FileSpreadsheet className="h-5 w-5 text-primary" /></div>
+                        <div>
+                          <p className="font-bold text-sm">{a.title}</p>
+                          <p className="text-xs text-muted-foreground">{a.mappings.length} {a.grouping} Topics Assigned</p>
+                        </div>
                       </div>
-                    </div>
-                    <Button size="sm" onClick={() => handleAddAssignment(q)} variant="secondary">
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add to Class
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
+                      <Button variant="outline" size="sm" onClick={() => downloadAssignmentSheet(a)}><Download className="h-4 w-4 mr-2" /> Download Mapping</Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
         </TabsContent>
@@ -513,24 +540,15 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle>Class-Specific Roster</CardTitle>
-                <CardDescription>Define the student list for this class only.</CardDescription>
+                <CardTitle>Class Roster</CardTitle>
+                <CardDescription>Add students manually or upload a list.</CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={clearRoster} className="text-destructive">
-                  <Eraser className="h-4 w-4 mr-2" />
-                  Clear List
-                </Button>
-                <input 
-                  type="file" 
-                  accept=".xlsx,.xls,.csv,.pdf,image/*" 
-                  className="hidden" 
-                  ref={rosterFileInputRef} 
-                  onChange={handleRosterUpload} 
-                />
+                <Button variant="outline" size="sm" onClick={clearRoster} className="text-destructive"><Eraser className="h-4 w-4 mr-2" /> Clear List</Button>
+                <input type="file" accept=".xlsx,.xls,.csv,.pdf,image/*" className="hidden" ref={rosterFileInputRef} onChange={handleRosterUpload} />
                 <Button variant="secondary" size="sm" onClick={() => rosterFileInputRef.current?.click()} disabled={isRosterUploading}>
-                  {isRosterUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
-                  Import & Replace
+                  {isRosterUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                  Import Roster
                 </Button>
               </div>
             </CardHeader>
@@ -542,32 +560,18 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
               </div>
               <div className="rounded-md border max-h-[400px] overflow-auto">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Roll No / ID</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
+                  <TableHeader><TableRow><TableHead>Roll No / ID</TableHead><TableHead>Name</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {roster.map(s => (
                       <TableRow key={s.id}>
                         <TableCell className="font-mono text-xs">{s.roll}</TableCell>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </TableCell>
                       </TableRow>
                     ))}
-                    {roster.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
-                          No students in roster for this class. Use "Import & Replace" to add them.
-                        </TableCell>
-                      </TableRow>
-                    )}
+                    {roster.length === 0 && <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">Roster is empty. Import a list to get started.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
@@ -576,130 +580,87 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         </TabsContent>
 
         <TabsContent value="submissions" className="space-y-6 mt-6">
-          <div className="grid gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div className="space-y-1">
-                  <CardTitle>Assignment Gradebook</CardTitle>
-                  <CardDescription>Select a task and analyze submissions from your shared folder.</CardDescription>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Grading Hub</CardTitle>
+                <CardDescription>Track submissions and AI analysis for your assignments.</CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Select value={activeAssignmentId} onValueChange={setActiveAssignmentId}>
+                  <SelectTrigger className="w-[250px]"><SelectValue placeholder="Select Assignment" /></SelectTrigger>
+                  <SelectContent>
+                    {assignments.map(a => <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Dialog open={isDriveDialogOpen} onOpenChange={setIsDriveDialogOpen}>
+                  <DialogTrigger asChild><Button disabled={!activeAssignmentId || roster.length === 0}>{isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />} Analyze Drive</Button></DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Connect Submission Folder</DialogTitle></DialogHeader>
+                    <div className="py-4 space-y-2">
+                      <Label>Google Drive Link</Label>
+                      <Input placeholder="https://drive.google.com/..." value={driveLink} onChange={e => setDriveLink(e.target.value)} />
+                    </div>
+                    <DialogFooter><Button onClick={handleSyncDrive} disabled={!driveLink}>Start Sync</Button></DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {activeAssignment && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1"><Layers className="h-3 w-3" /> {activeAssignment.type}</Badge>
+                  <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">{activeAssignment.grouping === 'Individual' ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />} {activeAssignment.grouping}</Badge>
                 </div>
-                <div className="flex gap-2">
-                  <Select value={activeAssignmentId} onValueChange={setActiveAssignmentId}>
-                    <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select Assignment" /></SelectTrigger>
-                    <SelectContent>
-                      {assignments.map(a => (
-                        <SelectItem key={a.id} value={a.id}>
-                          {a.title.length > 30 ? a.title.substring(0, 30) + '...' : a.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Dialog open={isDriveDialogOpen} onOpenChange={setIsDriveDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button disabled={!activeAssignmentId || roster.length === 0}>
-                        {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
-                        Analyze Drive
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>Connect Submission Folder</DialogTitle><DialogDescription>Analyze folder for assignment: {assignments.find(a => a.id === activeAssignmentId)?.title}</DialogDescription></DialogHeader>
-                      <div className="py-4 space-y-2">
-                        <Label>Google Drive Link</Label>
-                        <Input placeholder="https://drive.google.com/..." value={driveLink} onChange={e => setDriveLink(e.target.value)} />
-                      </div>
-                      <DialogFooter><Button onClick={handleSyncDrive} disabled={!driveLink}>Start Analysis</Button></DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {activeAssignment && (
-                  <div className="mb-4 flex gap-4">
-                    <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">
-                      <Layers className="h-3 w-3" /> {activeAssignment.type}
-                    </Badge>
-                    <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">
-                      {activeAssignment.grouping === 'Individual' ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />}
-                      {activeAssignment.grouping} Assignment
-                    </Badge>
-                  </div>
-                )}
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student (Roll)</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Submission Date</TableHead>
-                        <TableHead>AI Plagiarism</TableHead>
-                        <TableHead className="text-right">Score & Feedback</TableHead>
+              )}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>AI Plagiarism</TableHead>
+                      <TableHead className="text-right">Grade & Feedback</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activeSubmissions.map(sub => (
+                      <TableRow key={sub.studentId}>
+                        <TableCell><div><p className="font-bold">{sub.studentName}</p><p className="text-xs text-muted-foreground font-mono">{sub.rollNumber}</p></div></TableCell>
+                        <TableCell><Badge variant={sub.status === 'Submitted' ? 'secondary' : sub.status === 'Late' ? 'destructive' : 'outline'}>{sub.status}</Badge></TableCell>
+                        <TableCell>{sub.plagiarismScore !== null && <div className="flex items-center gap-2"><Progress value={sub.plagiarismScore * 100} className="w-[60px] h-2" /><span className="text-[10px]">{(sub.plagiarismScore * 100).toFixed(0)}%</span></div>}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {sub.marks && <span className="font-bold text-primary">{sub.marks}%</span>}
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedSubmission(sub)} disabled={!sub.fileName}><FileSearch className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {activeSubmissions.map(sub => (
-                        <TableRow key={sub.studentId}>
-                          <TableCell><div><p className="font-bold">{sub.studentName}</p><p className="text-xs text-muted-foreground font-mono">{sub.rollNumber}</p></div></TableCell>
-                          <TableCell><Badge variant={sub.status === 'Submitted' ? 'secondary' : sub.status === 'Late' ? 'destructive' : 'outline'}>{sub.status}</Badge></TableCell>
-                          <TableCell className="text-sm">{sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '-'}</TableCell>
-                          <TableCell>
-                            {sub.plagiarismScore !== null && (
-                              <div className="flex items-center gap-2"><Progress value={sub.plagiarismScore * 100} className="w-[60px] h-2" /><span className="text-[10px]">{(sub.plagiarismScore * 100).toFixed(0)}%</span></div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {sub.marks && <span className="font-bold text-primary">{sub.marks}%</span>}
-                              <Button variant="ghost" size="icon" onClick={() => setSelectedSubmission(sub)} disabled={!sub.fileName}><FileSearch className="h-4 w-4" /></Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {assignments.length === 0 && (
-                        <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">No assignments created yet. Go to Syllabus tab to generate tasks.</TableCell></TableRow>
-                      )}
-                      {assignments.length > 0 && roster.length === 0 && (
-                        <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground italic">Roster is empty. Import students in the Roster tab first.</TableCell></TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
       <Dialog open={!!selectedSubmission} onOpenChange={o => !o && setSelectedSubmission(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Detailed Analysis Result</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Submission Analysis</DialogTitle></DialogHeader>
           {selectedSubmission && (
             <div className="space-y-4 py-4">
               <div className="flex justify-between border-b pb-2">
-                <div>
-                  <span className="font-bold block">{selectedSubmission.studentName}</span>
-                  <span className="text-xs text-muted-foreground">Assignment: {activeAssignment?.title}</span>
-                </div>
-                <span className="text-primary font-bold text-xl">Grade: {selectedSubmission.marks}/100</span>
+                <div><span className="font-bold block">{selectedSubmission.studentName}</span><span className="text-xs text-muted-foreground">ID: {selectedSubmission.rollNumber}</span></div>
+                <span className="text-primary font-bold text-xl">{selectedSubmission.marks}/100</span>
               </div>
               <div className="space-y-2">
-                <p className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" /> AI Evaluator Feedback
-                </p>
+                <p className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1"><Sparkles className="h-3 w-3" /> AI Feedback</p>
                 <div className="text-sm italic p-4 bg-secondary/50 rounded-lg border">"{selectedSubmission.aiFeedback}"</div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-                <div className="flex flex-col gap-1">
-                  <span className="font-bold uppercase">Source File</span>
-                  <span className="truncate">{selectedSubmission.fileName}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="font-bold uppercase">Submission Status</span>
-                  <span>{selectedSubmission.status}</span>
-                </div>
               </div>
             </div>
           )}
-          <DialogFooter><Button onClick={() => setSelectedSubmission(null)}>Close Report</Button></DialogFooter>
+          <DialogFooter><Button onClick={() => setSelectedSubmission(null)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

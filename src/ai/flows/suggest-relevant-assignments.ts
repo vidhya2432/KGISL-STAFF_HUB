@@ -18,6 +18,7 @@ const SuggestRelevantAssignmentsInputSchema = z.object({
   isImage: z.boolean().optional().describe('Whether the content is an image data URI.'),
   assignmentType: z.string().describe('The type of assignment to generate (e.g., Case Study, Research Paper, Sums).'),
   grouping: z.enum(['Individual', 'Team']).describe('Whether the assignment is for individuals or teams.'),
+  count: z.number().describe('The exact number of unique topics to generate.'),
 });
 export type SuggestRelevantAssignmentsInput = z.infer<
   typeof SuggestRelevantAssignmentsInputSchema
@@ -42,21 +43,22 @@ const assignmentSuggestionPrompt = ai.definePrompt({
   name: 'assignmentSuggestionPrompt',
   input: {schema: SuggestRelevantAssignmentsInputSchema},
   output: {schema: SuggestRelevantAssignmentsOutputSchema},
-  prompt: `You are an AI assistant designed to suggest relevant assignments for a given course syllabus.
+  prompt: `You are an AI assistant designed to suggest unique and relevant assignments for a given course syllabus.
 
-  Based on the following syllabus content, suggest a list of assignments that are specifically of type: {{{assignmentType}}}.
-  The assignments should be designed for {{{grouping}}} work.
+  Based on the following syllabus content, generate exactly {{{count}}} unique and creative assignment topics/questions of type: {{{assignmentType}}}.
   
-  Each suggestion should be a clear, actionable assignment question or task.
+  IMPORTANT:
+  - These assignments are for {{{grouping}}} work.
+  - You MUST generate exactly {{{count}}} distinct topics. No duplicates.
+  - Each topic should be specific and actionable.
+  - Return the results as an array of strings.
 
   {{#if isImage}}
   Analyze the provided syllabus image: {{media url=syllabusContent}}
   {{else}}
   Analyze the following syllabus text:
   {{{syllabusContent}}}
-  {{/if}}
-
-  Please provide a list of suggested assignments in the requested format.`,
+  {{/if}}`,
 });
 
 const suggestRelevantAssignmentsFlow = ai.defineFlow(

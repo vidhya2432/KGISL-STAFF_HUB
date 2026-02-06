@@ -2,7 +2,7 @@
 
 import { detectPlagiarism, DetectPlagiarismInput } from '@/ai/flows/detect-plagiarism-in-submissions';
 import { suggestRelevantAssignments, SuggestRelevantAssignmentsInput } from '@/ai/flows/suggest-relevant-assignments';
-import { extractStudentRoster } from '@/ai/flows/extract-student-roster-flow';
+import { extractRosterAction as extractRosterFlow } from '@/ai/flows/extract-student-roster-flow';
 import { z } from 'zod';
 
 const plagiarismSchema = z.object({
@@ -14,6 +14,7 @@ const suggestionSchema = z.object({
   isImage: z.boolean().optional(),
   assignmentType: z.string().min(1, 'Assignment type is required.'),
   grouping: z.enum(['Individual', 'Team']),
+  count: z.number().min(1),
 });
 
 export async function checkPlagiarismAction(prevState: any, formData: FormData) {
@@ -51,6 +52,7 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
     isImage: formData.get('isImage') === 'true',
     assignmentType: formData.get('assignmentType'),
     grouping: formData.get('grouping'),
+    count: parseInt(formData.get('count') as string || '1'),
   });
 
   if (!validatedFields.success) {
@@ -69,6 +71,7 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
       data: result,
     };
   } catch (error) {
+    console.error('AI Suggestion Error:', error);
     return {
       message: 'An error occurred while generating suggestions.',
       errors: null,
@@ -79,7 +82,7 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
 
 export async function extractRosterAction(content: string, isImage: boolean) {
   try {
-    const result = await extractStudentRoster({ content, isImage });
+    const result = await extractRosterFlow({ content, isImage });
     return {
       success: true,
       data: result.students,
@@ -94,13 +97,9 @@ export async function extractRosterAction(content: string, isImage: boolean) {
 
 export async function syncFromDriveAction(classId: string, assignmentId: string, driveLink: string, studentRoster: { id: string, name: string, roll: string }[]) {
   // Simulate connecting to the provided link
-  console.log(`Connecting to Google Drive link: ${driveLink} for class ${classId}`);
-  
-  // Simulate an API call to Google Drive
   await new Promise((resolve) => setTimeout(resolve, 2500));
 
   const syncResults = studentRoster.map((student) => {
-    // Randomly decide if this student has submitted (85% chance)
     const hasSubmitted = Math.random() > 0.15;
     
     if (!hasSubmitted) {
@@ -119,7 +118,7 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
 
     const isLate = Math.random() > 0.8;
     const marks = Math.floor(Math.random() * 35) + 65;
-    const plagiarismScore = Math.random() * 0.18; // Keep it mostly low for realism
+    const plagiarismScore = Math.random() * 0.18;
     const fileName = `${student.roll}_Assignment_Submission.pdf`;
     
     const feedbacks = [
