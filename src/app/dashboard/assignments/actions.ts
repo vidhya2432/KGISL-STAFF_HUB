@@ -1,3 +1,4 @@
+
 'use server';
 
 import { detectPlagiarism, DetectPlagiarismInput } from '@/ai/flows/detect-plagiarism-in-submissions';
@@ -79,7 +80,6 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
   // Simulate an API call to Google Drive
   await new Promise((resolve) => setTimeout(resolve, 3000));
 
-  // Mock data representing what might be found in the specified Google Drive folder
   const mockStudents = [
     { id: 'S1', name: 'Alice Johnson', roll: 'CS001' },
     { id: 'S2', name: 'Bob Williams', roll: 'CS002' },
@@ -89,7 +89,7 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
   ];
 
   const syncResults = mockStudents.map((student) => {
-    const hasSubmitted = Math.random() > 0.1; // Higher submission rate for mock
+    const hasSubmitted = Math.random() > 0.1;
     if (!hasSubmitted) {
       return {
         studentId: student.id,
@@ -99,12 +99,24 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
         submittedAt: null,
         marks: null,
         plagiarismScore: null,
+        fileName: null,
+        aiFeedback: null,
       };
     }
 
     const isLate = Math.random() > 0.8;
     const marks = Math.floor(Math.random() * 40) + 60;
-    const plagiarismScore = Math.random() * 0.25; // Random mock plagiarism score
+    const plagiarismScore = Math.random() * 0.25;
+    const fileName = `${student.roll}_Assignment_Final.pdf`;
+    
+    // Simulated AI Feedback
+    const feedbacks = [
+      "Excellent logic and clear explanation of concepts.",
+      "Good effort, but needs more depth in the analysis section.",
+      "Solid implementation. Plagiarism check passed successfully.",
+      "Well-structured report with accurate calculations.",
+    ];
+    const aiFeedback = feedbacks[Math.floor(Math.random() * feedbacks.length)];
 
     return {
       studentId: student.id,
@@ -114,6 +126,8 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
       submittedAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
       marks,
       plagiarismScore,
+      fileName,
+      aiFeedback,
     };
   });
 

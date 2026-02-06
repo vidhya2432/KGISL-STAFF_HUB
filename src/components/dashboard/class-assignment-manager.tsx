@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useActionState, useRef, startTransition } from 'react';
@@ -28,7 +29,8 @@ import {
   Loader2,
   Upload,
   Image as ImageIcon,
-  ExternalLink
+  FileSearch,
+  CheckCircle2
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction } from '@/app/dashboard/assignments/actions';
 import { format, parseISO } from 'date-fns';
@@ -46,6 +48,8 @@ interface StudentSubmission {
   submittedAt: string | null;
   marks: number | null;
   plagiarismScore: number | null;
+  fileName: string | null;
+  aiFeedback: string | null;
 }
 
 export function ClassAssignmentManager({ classId }: { classId: string }) {
@@ -56,6 +60,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [isExtracting, setIsExtracting] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<StudentSubmission | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,7 +138,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         setSubmissions(response.data);
         toast({
           title: 'Google Drive Synced',
-          description: `Successfully analyzed submissions from ${driveLink.substring(0, 30)}...`,
+          description: `Successfully analyzed files from ${driveLink.substring(0, 30)}...`,
         });
       }
     } catch (error) {
@@ -273,41 +278,49 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <CardDescription>Automated tracking linked to your connected Google Drive folder.</CardDescription>
               </div>
               
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button disabled={isSyncing}>
-                    {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
-                    Sync from Drive
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Connect Google Drive Folder</DialogTitle>
-                    <DialogDescription>
-                      Enter the shareable link of the folder containing student assignment submissions.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="drive-link">Folder Link</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="drive-link"
-                          placeholder="https://drive.google.com/drive/folders/..."
-                          value={driveLink}
-                          onChange={(e) => setDriveLink(e.target.value)}
-                        />
+              <div className="flex gap-2">
+                {submissions.length > 0 && (
+                  <Badge variant="outline" className="flex gap-1 py-1">
+                    <CheckCircle2 className="h-3 w-3 text-primary" />
+                    Drive Connected
+                  </Badge>
+                )}
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button disabled={isSyncing}>
+                      {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
+                      Sync from Drive
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Connect Google Drive Folder</DialogTitle>
+                      <DialogDescription>
+                        Enter the shareable link of the folder containing student assignment submissions.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="drive-link">Folder Link</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="drive-link"
+                            placeholder="https://drive.google.com/drive/folders/..."
+                            value={driveLink}
+                            onChange={(e) => setDriveLink(e.target.value)}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSyncDrive} disabled={!driveLink}>
-                      Start Analysis
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                      <Button onClick={handleSyncDrive} disabled={!driveLink}>
+                        Start Analysis
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -317,9 +330,9 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                       <TableHead>Roll No</TableHead>
                       <TableHead>Student Name</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Submitted On</TableHead>
+                      <TableHead>Detected File</TableHead>
                       <TableHead>Plagiarism</TableHead>
-                      <TableHead className="text-right">Marks / 100</TableHead>
+                      <TableHead className="text-right">Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -333,8 +346,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                               {sub.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-muted-foreground text-xs">
-                            {sub.submittedAt ? format(parseISO(sub.submittedAt), 'PPp') : '-'}
+                          <TableCell className="text-xs text-muted-foreground italic">
+                            {sub.fileName || '-'}
                           </TableCell>
                           <TableCell>
                             {sub.plagiarismScore !== null ? (
@@ -346,8 +359,15 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                               </div>
                             ) : '-'}
                           </TableCell>
-                          <TableCell className="text-right font-bold text-primary">
-                            {sub.marks ?? '-'}
+                          <TableCell className="text-right">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setSelectedSubmission(sub)}
+                              disabled={!sub.fileName}
+                            >
+                              <FileSearch className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -365,6 +385,65 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Submission Detail Dialog */}
+      <Dialog open={!!selectedSubmission} onOpenChange={(open) => !open && setSelectedSubmission(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Submission Analysis: {selectedSubmission?.studentName}</DialogTitle>
+            <DialogDescription>
+              Details extracted from Drive link: {driveLink.substring(0, 40)}...
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSubmission && (
+            <div className="grid gap-6 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Roll Number</p>
+                  <p className="font-mono">{selectedSubmission.rollNumber}</p>
+                </div>
+                <div className="space-y-1 text-right">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Final Marks</p>
+                  <p className="text-2xl font-bold text-primary">{selectedSubmission.marks}/100</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2 rounded-md border p-4 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Analyzed File</p>
+                  <Badge variant="outline">{selectedSubmission.fileName}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Submitted at: {selectedSubmission.submittedAt ? format(parseISO(selectedSubmission.submittedAt), 'PPp') : 'N/A'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">AI Analysis & Feedback</p>
+                <p className="text-sm leading-relaxed p-4 bg-card rounded-md border italic">
+                  "{selectedSubmission.aiFeedback}"
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Plagiarism Status</p>
+                <div className="flex items-center gap-4">
+                  <Progress value={(selectedSubmission.plagiarismScore || 0) * 100} className="flex-1 h-3" />
+                  <span className="font-bold">{( (selectedSubmission.plagiarismScore || 0) * 100).toFixed(0)}% Match</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedSubmission.plagiarismScore && selectedSubmission.plagiarismScore > 0.1 
+                    ? "Minor similarities detected with external documentation. Overall original."
+                    : "No significant plagiarism detected. Submission appears original."}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setSelectedSubmission(null)}>Close Analysis</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
