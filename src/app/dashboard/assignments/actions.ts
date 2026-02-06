@@ -73,23 +73,17 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
   }
 }
 
-export async function syncFromDriveAction(classId: string, assignmentId: string, driveLink: string) {
+export async function syncFromDriveAction(classId: string, assignmentId: string, driveLink: string, studentRoster: { id: string, name: string, roll: string }[]) {
   // Simulate connecting to the provided link
   console.log(`Connecting to Google Drive link: ${driveLink} for class ${classId}`);
   
   // Simulate an API call to Google Drive
-  await new Promise((resolve) => setTimeout(resolve, 3000));
+  await new Promise((resolve) => setTimeout(resolve, 2500));
 
-  const mockStudents = [
-    { id: 'S1', name: 'Alice Johnson', roll: 'CS001' },
-    { id: 'S2', name: 'Bob Williams', roll: 'CS002' },
-    { id: 'S3', name: 'Charlie Brown', roll: 'CS003' },
-    { id: 'S4', name: 'Diana Miller', roll: 'CS004' },
-    { id: 'S5', name: 'Ethan Davis', roll: 'CS005' },
-  ];
-
-  const syncResults = mockStudents.map((student) => {
-    const hasSubmitted = Math.random() > 0.1;
+  const syncResults = studentRoster.map((student) => {
+    // Randomly decide if this student has submitted (85% chance)
+    const hasSubmitted = Math.random() > 0.15;
+    
     if (!hasSubmitted) {
       return {
         studentId: student.id,
@@ -105,16 +99,16 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
     }
 
     const isLate = Math.random() > 0.8;
-    const marks = Math.floor(Math.random() * 40) + 60;
-    const plagiarismScore = Math.random() * 0.25;
-    const fileName = `${student.roll}_Assignment_Final.pdf`;
+    const marks = Math.floor(Math.random() * 35) + 65;
+    const plagiarismScore = Math.random() * 0.18; // Keep it mostly low for realism
+    const fileName = `${student.roll}_Assignment_Submission.pdf`;
     
-    // Simulated AI Feedback
     const feedbacks = [
-      "Excellent logic and clear explanation of concepts.",
-      "Good effort, but needs more depth in the analysis section.",
-      "Solid implementation. Plagiarism check passed successfully.",
-      "Well-structured report with accurate calculations.",
+      "Well-structured response with clear arguments.",
+      "Demonstrates a solid understanding of the core concepts.",
+      "Good use of references and data supporting the conclusions.",
+      "Clear explanation of the methodology used.",
+      "Creative approach to the problem solving section."
     ];
     const aiFeedback = feedbacks[Math.floor(Math.random() * feedbacks.length)];
 
@@ -123,7 +117,7 @@ export async function syncFromDriveAction(classId: string, assignmentId: string,
       studentName: student.name,
       rollNumber: student.roll,
       status: isLate ? 'Late' : 'Submitted',
-      submittedAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
+      submittedAt: new Date(Date.now() - Math.random() * 172800000).toISOString(),
       marks,
       plagiarismScore,
       fileName,

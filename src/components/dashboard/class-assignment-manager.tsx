@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useActionState, useRef, startTransition } from 'react';
+import { useState, useActionState, useRef, startTransition, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,10 @@ import {
   Upload,
   Image as ImageIcon,
   FileSearch,
-  CheckCircle2
+  CheckCircle2,
+  Plus,
+  Trash2,
+  UserPlus
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction } from '@/app/dashboard/assignments/actions';
 import { format, parseISO } from 'date-fns';
@@ -39,6 +42,12 @@ import { toast } from '@/hooks/use-toast';
 // pdfjs initialization
 import * as pdfjsLib from 'pdfjs-dist';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
+interface Student {
+  id: string;
+  name: string;
+  roll: string;
+}
 
 interface StudentSubmission {
   studentId: string;
@@ -56,11 +65,16 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [syllabusInput, setSyllabusInput] = useState('');
   const [isImageUpload, setIsImageUpload] = useState(false);
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
+  const [roster, setRoster] = useState<Student[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<StudentSubmission | null>(null);
+  
+  // Student input state
+  const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentRoll, setNewStudentRoll] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +83,47 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     errors: null,
     data: null,
   });
+
+  // Load roster from localStorage or defaults
+  useEffect(() => {
+    const saved = localStorage.getItem(`roster_${classId}`);
+    if (saved) {
+      setRoster(JSON.parse(saved));
+    } else {
+      // Default mock roster if empty
+      const initial = [
+        { id: '1', name: 'Alice Johnson', roll: 'CS001' },
+        { id: '2', name: 'Bob Williams', roll: 'CS002' },
+      ];
+      setRoster(initial);
+      localStorage.setItem(`roster_${classId}`, JSON.stringify(initial));
+    }
+    // Reset submissions when class changes
+    setSubmissions([]);
+    setDriveLink('');
+  }, [classId]);
+
+  const saveRoster = (newRoster: Student[]) => {
+    setRoster(newRoster);
+    localStorage.setItem(`roster_${classId}`, JSON.stringify(newRoster));
+  };
+
+  const addStudent = () => {
+    if (!newStudentName.trim() || !newStudentRoll.trim()) return;
+    const newStudent = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: newStudentName,
+      roll: newStudentRoll,
+    };
+    saveRoster([...roster, newStudent]);
+    setNewStudentName('');
+    setNewStudentRoll('');
+    toast({ title: 'Student Added', description: `${newStudentName} added to roster.` });
+  };
+
+  const removeStudent = (id: string) => {
+    saveRoster(roster.filter(s => s.id !== id));
+  };
 
   const extractTextFromPdf = async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
@@ -121,11 +176,11 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
 
   const handleSyncDrive = async () => {
     if (!driveLink) {
-      toast({
-        variant: 'destructive',
-        title: 'Missing Link',
-        description: 'Please provide a valid Google Drive folder link.',
-      });
+      toast({ variant: 'destructive', title: 'Missing Link', description: 'Please provide a valid Drive link.' });
+      return;
+    }
+    if (roster.length === 0) {
+      toast({ variant: 'destructive', title: 'Empty Roster', description: 'Please add students to your roster first.' });
       return;
     }
 
@@ -133,19 +188,19 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     setIsDialogOpen(false);
     
     try {
-      const response = await syncFromDriveAction(classId, 'A1', driveLink);
+      const response = await syncFromDriveAction(classId, 'A1', driveLink, roster);
       if (response.success && response.data) {
         setSubmissions(response.data);
         toast({
-          title: 'Google Drive Synced',
-          description: `Successfully analyzed files from ${driveLink.substring(0, 30)}...`,
+          title: 'Analysis Complete',
+          description: `Checked submissions for ${roster.length} students from the Drive link.`,
         });
       }
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Sync Failed',
-        description: 'Could not connect to the provided Google Drive link.',
+        description: 'Could not analyze files from the provided Drive link.',
       });
     } finally {
       setIsSyncing(false);
@@ -154,11 +209,9 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
 
   const handleSuggest = () => {
     if (!syllabusInput.trim()) return;
-    
     const formData = new FormData();
     formData.append('syllabusContent', syllabusInput);
     formData.append('isImage', isImageUpload.toString());
-    
     startTransition(() => {
       suggestionDispatch(formData);
     });
@@ -167,14 +220,18 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="syllabus">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="syllabus">
             <FileText className="mr-2 h-4 w-4" />
-            Syllabus & AI Generator
+            Syllabus & AI
+          </TabsTrigger>
+          <TabsTrigger value="roster">
+            <UserPlus className="mr-2 h-4 w-4" />
+            Class Roster
           </TabsTrigger>
           <TabsTrigger value="submissions">
             <Users className="mr-2 h-4 w-4" />
-            Student Submissions
+            Drive Sync
           </TabsTrigger>
         </TabsList>
 
@@ -183,7 +240,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             <CardHeader>
               <CardTitle>AI Assignment Generator</CardTitle>
               <CardDescription>
-                Upload your syllabus (PDF/Image) or paste the content below. Our AI will analyze the objectives and suggest assignment questions.
+                Upload your syllabus (PDF/Image) to generate assignment questions.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -206,7 +263,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 </Button>
                 {syllabusInput && (
                   <Button variant="ghost" size="icon" onClick={() => { setSyllabusInput(''); setIsImageUpload(false); }}>
-                    <Search className="h-4 w-4 rotate-45" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
               </div>
@@ -217,110 +274,128 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   <div className="flex items-center justify-center border-2 border-dashed rounded-md p-6 bg-muted/30">
                     <div className="flex flex-col items-center gap-2">
                       <ImageIcon className="h-10 w-10 text-muted-foreground opacity-50" />
-                      <p className="text-sm font-medium">Syllabus Image Ready for Analysis</p>
-                      <Button variant="link" size="sm" onClick={() => { setSyllabusInput(''); setIsImageUpload(false); }}>
-                        Remove Image & Paste Text
-                      </Button>
+                      <p className="text-sm font-medium">Syllabus Image Ready</p>
                     </div>
                   </div>
                 ) : (
                   <Textarea
                     id="syllabus"
-                    placeholder="Paste syllabus modules, topics, and learning outcomes here..."
-                    className="min-h-[200px]"
+                    placeholder="Paste syllabus text here..."
+                    className="min-h-[150px]"
                     value={syllabusInput}
                     onChange={(e) => setSyllabusInput(e.target.value)}
                   />
                 )}
               </div>
-              <Button 
-                onClick={handleSuggest} 
-                disabled={isSuggesting || syllabusInput.length < 10} 
-                className="w-full"
-              >
+              <Button onClick={handleSuggest} disabled={isSuggesting || syllabusInput.length < 10} className="w-full">
                 {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Generate Assignment Questions
+                Generate Questions
               </Button>
             </CardContent>
           </Card>
 
           {suggestionState.data?.suggestedAssignments && (
             <Card className="border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="text-lg">Suggested Assignment Questions</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">AI Suggestions</CardTitle></CardHeader>
               <CardContent>
-                <ul className="space-y-4">
+                <ul className="space-y-2">
                   {suggestionState.data.suggestedAssignments.map((q: string, i: number) => (
-                    <li key={i} className="flex gap-3 p-3 bg-card rounded-md border shadow-sm">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
-                        {i + 1}
-                      </span>
-                      <p className="text-sm leading-relaxed">{q}</p>
-                    </li>
+                    <li key={i} className="p-3 bg-card rounded-md border text-sm">{q}</li>
                   ))}
                 </ul>
-                <div className="mt-6">
-                   <Button className="w-full" variant="secondary">
-                     Create Assignment from These Suggestions
-                   </Button>
-                </div>
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="roster" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Manage Class Roster</CardTitle>
+              <CardDescription>Add your students below. Drive sync will use these details to find submissions.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Roll Number</Label>
+                  <Input placeholder="e.g. CS101" value={newStudentRoll} onChange={(e) => setNewStudentRoll(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Student Name</Label>
+                  <Input placeholder="e.g. John Doe" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} />
+                </div>
+              </div>
+              <Button onClick={addStudent} variant="secondary" className="w-full">
+                <Plus className="mr-2 h-4 w-4" /> Add Student to Roster
+              </Button>
+
+              <div className="rounded-md border mt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Roll No</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {roster.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-mono">{s.roll}</TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => removeStudent(s.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {roster.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                          Roster is empty. Add students to get started.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="submissions" className="space-y-6 mt-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle>Student Roster & Submissions</CardTitle>
-                <CardDescription>Automated tracking linked to your connected Google Drive folder.</CardDescription>
+                <CardTitle>Google Drive Integration</CardTitle>
+                <CardDescription>Analyze submissions from a shared folder for your roster.</CardDescription>
               </div>
-              
-              <div className="flex gap-2">
-                {submissions.length > 0 && (
-                  <Badge variant="outline" className="flex gap-1 py-1">
-                    <CheckCircle2 className="h-3 w-3 text-primary" />
-                    Drive Connected
-                  </Badge>
-                )}
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button disabled={isSyncing}>
-                      {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
-                      Sync from Drive
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Connect Google Drive Folder</DialogTitle>
-                      <DialogDescription>
-                        Enter the shareable link of the folder containing student assignment submissions.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="drive-link">Folder Link</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="drive-link"
-                            placeholder="https://drive.google.com/drive/folders/..."
-                            value={driveLink}
-                            onChange={(e) => setDriveLink(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                      <Button onClick={handleSyncDrive} disabled={!driveLink}>
-                        Start Analysis
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button disabled={isSyncing || roster.length === 0}>
+                    {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
+                    Start Sync
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Connect Drive Folder</DialogTitle>
+                    <DialogDescription>Paste the link to the folder containing your student submissions.</DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4">
+                    <Label>Folder Link</Label>
+                    <Input 
+                      placeholder="https://drive.google.com/..." 
+                      value={driveLink} 
+                      onChange={(e) => setDriveLink(e.target.value)} 
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={handleSyncDrive} disabled={!driveLink}>Analyze {roster.length} Students</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -328,53 +403,41 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Roll No</TableHead>
-                      <TableHead>Student Name</TableHead>
+                      <TableHead>Student</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Detected File</TableHead>
                       <TableHead>Plagiarism</TableHead>
-                      <TableHead className="text-right">Details</TableHead>
+                      <TableHead className="text-right">Analysis</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {submissions.length > 0 ? (
-                      submissions.map((sub) => (
-                        <TableRow key={sub.studentId}>
-                          <TableCell className="font-mono text-xs">{sub.rollNumber}</TableCell>
-                          <TableCell className="font-medium">{sub.studentName}</TableCell>
-                          <TableCell>
-                            <Badge variant={sub.status === 'Late' ? 'destructive' : sub.status === 'Submitted' ? 'secondary' : 'outline'}>
-                              {sub.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground italic">
-                            {sub.fileName || '-'}
-                          </TableCell>
-                          <TableCell>
-                            {sub.plagiarismScore !== null ? (
-                              <div className="flex items-center gap-2">
-                                <Progress value={sub.plagiarismScore * 100} className="w-[60px] h-1.5" />
-                                <span className={`text-[10px] font-bold ${sub.plagiarismScore > 0.5 ? 'text-destructive' : 'text-primary'}`}>
-                                  {(sub.plagiarismScore * 100).toFixed(0)}%
-                                </span>
-                              </div>
-                            ) : '-'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => setSelectedSubmission(sub)}
-                              disabled={!sub.fileName}
-                            >
-                              <FileSearch className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
+                    {submissions.map((sub) => (
+                      <TableRow key={sub.studentId}>
+                        <TableCell className="font-mono text-xs">{sub.rollNumber}</TableCell>
+                        <TableCell className="font-medium">{sub.studentName}</TableCell>
+                        <TableCell>
+                          <Badge variant={sub.status === 'Late' ? 'destructive' : sub.status === 'Submitted' ? 'secondary' : 'outline'}>
+                            {sub.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {sub.plagiarismScore !== null && (
+                            <div className="flex items-center gap-2">
+                              <Progress value={sub.plagiarismScore * 100} className="w-[50px] h-1.5" />
+                              <span className="text-[10px]">{(sub.plagiarismScore * 100).toFixed(0)}%</span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => setSelectedSubmission(sub)} disabled={!sub.fileName}>
+                            <FileSearch className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {submissions.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                          No submission data synced yet. Click "Sync from Drive" and provide a folder link.
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          {roster.length === 0 ? "Setup your roster first." : "Click 'Start Sync' to analyze submissions."}
                         </TableCell>
                       </TableRow>
                     )}
@@ -386,61 +449,27 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         </TabsContent>
       </Tabs>
 
-      {/* Submission Detail Dialog */}
       <Dialog open={!!selectedSubmission} onOpenChange={(open) => !open && setSelectedSubmission(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Submission Analysis: {selectedSubmission?.studentName}</DialogTitle>
-            <DialogDescription>
-              Details extracted from Drive link: {driveLink.substring(0, 40)}...
-            </DialogDescription>
+            <DialogTitle>Submission Analysis</DialogTitle>
           </DialogHeader>
           {selectedSubmission && (
-            <div className="grid gap-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Roll Number</p>
-                  <p className="font-mono">{selectedSubmission.rollNumber}</p>
-                </div>
-                <div className="space-y-1 text-right">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Final Marks</p>
-                  <p className="text-2xl font-bold text-primary">{selectedSubmission.marks}/100</p>
-                </div>
+            <div className="space-y-4 py-4">
+              <div className="flex justify-between border-b pb-2">
+                <span className="font-bold">{selectedSubmission.studentName}</span>
+                <span className="text-primary font-bold">Grade: {selectedSubmission.marks}/100</span>
               </div>
-              
-              <div className="space-y-2 rounded-md border p-4 bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Analyzed File</p>
-                  <Badge variant="outline">{selectedSubmission.fileName}</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Submitted at: {selectedSubmission.submittedAt ? format(parseISO(selectedSubmission.submittedAt), 'PPp') : 'N/A'}
-                </p>
+              <div className="text-sm italic p-3 bg-muted rounded-md">
+                "{selectedSubmission.aiFeedback}"
               </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">AI Analysis & Feedback</p>
-                <p className="text-sm leading-relaxed p-4 bg-card rounded-md border italic">
-                  "{selectedSubmission.aiFeedback}"
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Plagiarism Status</p>
-                <div className="flex items-center gap-4">
-                  <Progress value={(selectedSubmission.plagiarismScore || 0) * 100} className="flex-1 h-3" />
-                  <span className="font-bold">{( (selectedSubmission.plagiarismScore || 0) * 100).toFixed(0)}% Match</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {selectedSubmission.plagiarismScore && selectedSubmission.plagiarismScore > 0.1 
-                    ? "Minor similarities detected with external documentation. Overall original."
-                    : "No significant plagiarism detected. Submission appears original."}
-                </p>
+              <div className="text-xs text-muted-foreground">
+                File Analyzed: {selectedSubmission.fileName}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setSelectedSubmission(null)}>Close Analysis</Button>
+            <Button onClick={() => setSelectedSubmission(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
