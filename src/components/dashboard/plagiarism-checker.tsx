@@ -1,5 +1,6 @@
 'use client';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ function SubmitButton() {
 
 export function PlagiarismChecker() {
   const initialState = { message: null, errors: null, data: null };
-  const [state, dispatch] = useFormState(checkPlagiarismAction, initialState);
+  const [state, dispatch] = useActionState(checkPlagiarismAction, initialState);
 
   return (
     <Card>

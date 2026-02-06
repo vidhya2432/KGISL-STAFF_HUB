@@ -1,5 +1,6 @@
 'use client';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ function SubmitButton() {
 
 export function AssignmentSuggester() {
   const initialState = { message: null, errors: null, data: null };
-  const [state, dispatch] = useFormState(suggestAssignmentsAction, initialState);
+  const [state, dispatch] = useActionState(suggestAssignmentsAction, initialState);
 
   return (
     <Card>
