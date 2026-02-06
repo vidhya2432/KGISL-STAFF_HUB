@@ -1,14 +1,19 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, Calendar, LayoutGrid } from 'lucide-react';
+import { Plus, Trash2, LayoutGrid, Upload, Loader2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { processTimetableUploadAction } from './actions';
+import { toast } from '@/hooks/use-toast';
+
+// pdfjs initialization
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface TimetableEntry {
   id: string;
@@ -28,6 +33,9 @@ export default function TimetablePage() {
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [newClassName, setNewClassName] = useState('');
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -96,6 +104,74 @@ export default function TimetablePage() {
     );
   };
 
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    return fullText;
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedClassId) return;
+
+    setIsUploading(true);
+    try {
+      let content = '';
+      let isImage = false;
+
+      if (file.type === 'application/pdf') {
+        content = await extractTextFromPdf(file);
+      } else if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        content = await new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        isImage = true;
+      } else {
+        throw new Error('Please upload a PDF or an Image file.');
+      }
+
+      const response = await processTimetableUploadAction(content, isImage);
+      
+      if (response.success && response.data) {
+        const newEntries = response.data.map((entry: any) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          ...entry,
+        }));
+
+        setClasses(prev => prev.map(c => 
+          c.id === selectedClassId 
+            ? { ...c, entries: [...c.entries, ...newEntries] } 
+            : c
+        ));
+
+        toast({
+          title: 'Timetable Automated!',
+          description: `Extracted ${newEntries.length} periods automatically.`,
+        });
+      } else {
+        throw new Error(response.error || 'Failed to analyze timetable.');
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Automation Failed',
+        description: error.message,
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const selectedClass = classes.find((c) => c.id === selectedClassId);
 
   return (
@@ -103,7 +179,7 @@ export default function TimetablePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold font-headline">Faculty Timetable Manager</h1>
-          <p className="text-muted-foreground">Manage schedules for all your classes in one place.</p>
+          <p className="text-muted-foreground">Automate schedules using AI or manage them manually.</p>
         </div>
       </div>
 
@@ -166,12 +242,29 @@ export default function TimetablePage() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0">
                 <div>
                   <CardTitle className="font-headline text-2xl">Timetable for {selectedClass.name}</CardTitle>
-                  <CardDescription>Define schedule for this specific class group.</CardDescription>
+                  <CardDescription>Upload a document or add slots manually.</CardDescription>
                 </div>
-                <Button onClick={() => addEntry(selectedClass.id)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Slot
-                </Button>
+                <div className="flex gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                  />
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Upload & Automate
+                  </Button>
+                  <Button onClick={() => addEntry(selectedClass.id)} variant="outline">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Manual Slot
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {daysOfWeek.map((day) => {
