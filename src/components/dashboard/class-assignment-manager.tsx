@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useActionState, useRef, startTransition, useEffect } from 'react';
@@ -31,10 +32,12 @@ import {
   Plus,
   Trash2,
   UserPlus,
-  UserCheck
+  UserCheck,
+  FileSpreadsheet
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 // pdfjs initialization
 import * as pdfjsLib from 'pdfjs-dist';
@@ -173,33 +176,58 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
 
     setIsRosterUploading(true);
     try {
-      let content = '';
-      let isImage = false;
+      // Handle Excel separately (structured data)
+      if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.ms-excel') {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-      if (file.type === 'application/pdf') {
-        content = await extractTextFromPdf(file);
-      } else if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        content = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
+        const newStudents = jsonData.map((row: any) => {
+          // Attempt to find name and roll number in various column name formats
+          const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('name')) || Object.keys(row)[0];
+          const rollKey = Object.keys(row).find(k => k.toLowerCase().includes('roll') || k.toLowerCase().includes('id') || k.toLowerCase().includes('no')) || Object.keys(row)[1];
+          
+          return {
+            id: Math.random().toString(36).substr(2, 9),
+            name: row[nameKey]?.toString() || 'Unknown',
+            roll: row[rollKey]?.toString() || 'N/A',
+          };
         });
-        isImage = true;
-      } else {
-        throw new Error('Please upload a PDF or an Image file.');
-      }
 
-      const response = await extractRosterAction(content, isImage);
-      if (response.success && response.data) {
-        const newStudents = response.data.map((s: any) => ({
-          id: Math.random().toString(36).substr(2, 9),
-          name: s.name,
-          roll: s.rollNumber,
-        }));
         saveRoster([...roster, ...newStudents]);
-        toast({ title: 'Roster Automated', description: `Extracted ${newStudents.length} students automatically.` });
+        toast({ title: 'Excel Import Success', description: `Imported ${newStudents.length} students from spreadsheet.` });
+      } 
+      // Handle PDF/Image via AI extraction
+      else if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
+        let content = '';
+        let isImage = false;
+
+        if (file.type === 'application/pdf') {
+          content = await extractTextFromPdf(file);
+        } else {
+          const reader = new FileReader();
+          content = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          isImage = true;
+        }
+
+        const response = await extractRosterAction(content, isImage);
+        if (response.success && response.data) {
+          const newStudents = response.data.map((s: any) => ({
+            id: Math.random().toString(36).substr(2, 9),
+            name: s.name,
+            roll: s.rollNumber,
+          }));
+          saveRoster([...roster, ...newStudents]);
+          toast({ title: 'Roster Automated', description: `Extracted ${newStudents.length} students automatically.` });
+        } else {
+          throw new Error(response.error);
+        }
       } else {
-        throw new Error(response.error);
+        throw new Error('Unsupported file type. Use Excel, PDF, or Image.');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Roster Import Failed', description: error.message });
@@ -344,12 +372,12 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle>Manage Class Roster</CardTitle>
-                <CardDescription>Add students manually or upload a student list document.</CardDescription>
+                <CardDescription>Add students manually or upload an Excel, PDF, or image list.</CardDescription>
               </div>
               <div className="flex gap-2">
                 <input
                   type="file"
-                  accept=".pdf,image/*"
+                  accept=".xlsx,.xls,.pdf,image/*"
                   className="hidden"
                   ref={rosterFileInputRef}
                   onChange={handleRosterUpload}
@@ -359,8 +387,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   onClick={() => rosterFileInputRef.current?.click()}
                   disabled={isRosterUploading}
                 >
-                  {isRosterUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
-                  Upload Student List (AI)
+                  {isRosterUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+                  Upload Student List (Excel/AI)
                 </Button>
               </div>
             </CardHeader>
