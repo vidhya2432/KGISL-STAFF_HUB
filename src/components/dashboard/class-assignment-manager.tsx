@@ -102,6 +102,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     data: null,
   });
 
+  // Load class-specific data when classId changes
   useEffect(() => {
     const savedRoster = localStorage.getItem(`roster_${classId}`);
     if (savedRoster) setRoster(JSON.parse(savedRoster));
@@ -112,6 +113,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       const parsed = JSON.parse(savedAssignments);
       setAssignments(parsed);
       if (parsed.length > 0) setActiveAssignmentId(parsed[0].id);
+      else setActiveAssignmentId('');
     } else {
       setAssignments([]);
       setActiveAssignmentId('');
@@ -120,6 +122,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const savedSubmissions = localStorage.getItem(`submissions_${classId}`);
     if (savedSubmissions) setSubmissionsMap(JSON.parse(savedSubmissions));
     else setSubmissionsMap({});
+    
+    // Clear temporary inputs
+    setSyllabusInput('');
+    setDriveLink('');
   }, [classId]);
 
   const saveRoster = (newRoster: Student[]) => {
@@ -227,7 +233,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         let rollColIdx = -1;
         let headerRowIdx = -1;
 
-        // More specific keywords for better accuracy
         const nameKeywords = ['name', 'student', 'candidate', 'full name', 'member'];
         const rollKeywords = ['roll', 'reg', 'enrol', 'admission', 'id', 'student id', 'uax', 'uad'];
         const skipKeywords = ['s.no', 'sno', 'sl.no', 'serial', 'index', 'mobile', 'phone', 'contact', 'whatsapp', 'email'];
@@ -244,7 +249,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             const val = String(row[j] || '').toLowerCase().trim();
             if (val === '') continue;
 
-            // Specifically avoid serial number or contact number columns
             if (skipKeywords.some(k => val.includes(k))) continue;
 
             if (potentialNameIdx === -1 && nameKeywords.some(k => val.includes(k))) potentialNameIdx = j;
@@ -259,7 +263,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        // 2. FALLBACK PATTERN DETECTION (Improved to skip mobile numbers)
+        // 2. FALLBACK PATTERN DETECTION
         if (nameColIdx === -1 || rollColIdx === -1) {
           for (let i = 0; i < Math.min(rows.length, 20); i++) {
             const row = rows[i];
@@ -271,8 +275,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
               const val = String(row[j] || '').trim();
               if (val.length === 0) continue;
 
-              const isSequentialInt = /^\d+$/.test(val) && parseInt(val) < 200; // Small numbers are likely serials
-              const isMobile = /^\d{10}$/.test(val) || (val.length >= 10 && /^\d+$/.test(val)); // 10 digits are likely mobiles
+              const isSequentialInt = /^\d+$/.test(val) && parseInt(val) < 200;
+              const isMobile = /^\d{10}$/.test(val) || (val.length >= 10 && /^\d+$/.test(val));
               const hasDigits = /\d/.test(val);
               const isAlpha = /^[a-zA-Z\s.]+$/.test(val);
               
@@ -282,7 +286,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
               else if (isAlpha && val.length > 3) colCandidates.push({ idx: j, type: 'name' });
             }
 
-            // Prefer columns that aren't mobile or serial
             const bestName = colCandidates.find(c => c.type === 'name');
             const bestRoll = colCandidates.find(c => c.type === 'roll');
 
@@ -295,7 +298,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        // Final Default Guess
         if (nameColIdx === -1) nameColIdx = 1;
         if (rollColIdx === -1) rollColIdx = 0;
 
@@ -310,8 +312,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           const rollValue = String(row[rollColIdx] || '').trim();
           
           if (!nameValue && !rollValue) continue;
-          // Skip rows that look like headers we found
           if (nameKeywords.includes(nameValue.toLowerCase())) continue;
+
+          // Extra check: skip if it's a mobile number (approx 10 digits)
+          if (/^\d{10}$/.test(rollValue)) continue;
 
           const key = `${rollValue}-${nameValue}`;
           if (seen.has(key)) continue;
@@ -326,9 +330,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
 
         if (extractedStudents.length === 0) throw new Error('Could not extract any student data.');
         
-        // REPLACE roster with newly uploaded one
         saveRoster(extractedStudents);
-        toast({ title: 'Roster Replaced', description: `Imported ${extractedStudents.length} students from file.` });
+        toast({ title: 'Roster Updated', description: `Imported ${extractedStudents.length} students to this class.` });
       } else {
         // AI extraction for PDF/Images
         let content = '';
@@ -355,8 +358,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             name: s.name,
             roll: s.rollNumber
           }));
-          saveRoster(students); // REPLACE
-          toast({ title: 'Roster Replaced', description: `AI extracted ${students.length} students.` });
+          saveRoster(students);
+          toast({ title: 'Roster Updated', description: `AI extracted ${students.length} students to this class.` });
         } else {
           throw new Error(response.error);
         }
@@ -448,13 +451,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle>Student Directory</CardTitle>
-                <CardDescription>Populate the roster for automated tracking.</CardDescription>
+                <CardTitle>Class-Specific Roster</CardTitle>
+                <CardDescription>Define the student list for this class only.</CardDescription>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={clearRoster} className="text-destructive">
                   <Eraser className="h-4 w-4 mr-2" />
-                  Clear List
+                  Clear Roster
                 </Button>
                 <input 
                   type="file" 
@@ -499,7 +502,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                     {roster.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
-                          No students in roster. Use the fields above or Import Roster.
+                          No students in roster for this class. Use "Import & Replace" to add them.
                         </TableCell>
                       </TableRow>
                     )}
