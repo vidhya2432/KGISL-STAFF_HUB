@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useActionState } from 'react';
+import { useState, useActionState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -18,11 +17,18 @@ import {
   Users, 
   Loader2,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Upload,
+  FileUp,
+  Image as ImageIcon
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction } from '@/app/dashboard/assignments/actions';
 import { format, parseISO } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+
+// pdfjs initialization
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface StudentSubmission {
   studentId: string;
@@ -36,15 +42,66 @@ interface StudentSubmission {
 
 export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [syllabusInput, setSyllabusInput] = useState('');
-  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [isImageUpload, setIsImageUpload] = useState(false);
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [suggestionState, suggestionDispatch, isSuggesting] = useActionState(suggestAssignmentsAction, {
     message: null,
     errors: null,
     data: null,
   });
+
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    return fullText;
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsExtracting(true);
+    try {
+      if (file.type === 'application/pdf') {
+        const text = await extractTextFromPdf(file);
+        setSyllabusInput(text);
+        setIsImageUpload(false);
+        toast({ title: 'PDF Analyzed', description: 'Syllabus text extracted successfully.' });
+      } else if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        const dataUri = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        setSyllabusInput(dataUri);
+        setIsImageUpload(true);
+        toast({ title: 'Image Selected', description: 'Syllabus image will be analyzed by AI.' });
+      } else {
+        throw new Error('Please upload a PDF or an Image file.');
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: error.message,
+      });
+    } finally {
+      setIsExtracting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const handleSyncDrive = async () => {
     setIsSyncing(true);
@@ -69,8 +126,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const handleSuggest = async () => {
+    if (!syllabusInput.trim()) return;
     const formData = new FormData();
     formData.append('syllabusContent', syllabusInput);
+    formData.append('isImage', isImageUpload.toString());
     suggestionDispatch(formData);
   };
 
@@ -93,23 +152,59 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             <CardHeader>
               <CardTitle>AI Assignment Generator</CardTitle>
               <CardDescription>
-                Paste your syllabus content below. Our AI will analyze the learning objectives and suggest relevant assignment questions.
+                Upload your syllabus (PDF/Image) or paste the content below. Our AI will analyze the objectives and suggest assignment questions.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                />
+                <Button 
+                  variant="outline" 
+                  className="w-full flex-1" 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isExtracting || isSuggesting}
+                >
+                  {isExtracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Upload Syllabus (PDF/Image)
+                </Button>
+                {syllabusInput && (
+                  <Button variant="ghost" size="icon" onClick={() => { setSyllabusInput(''); setIsImageUpload(false); }}>
+                    <Search className="h-4 w-4 rotate-45" />
+                  </Button>
+                )}
+              </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="syllabus">Syllabus Content</Label>
-                <Textarea
-                  id="syllabus"
-                  placeholder="Paste syllabus modules, topics, and learning outcomes here..."
-                  className="min-h-[200px]"
-                  value={syllabusInput}
-                  onChange={(e) => setSyllabusInput(e.target.value)}
-                />
+                {isImageUpload ? (
+                  <div className="flex items-center justify-center border-2 border-dashed rounded-md p-6 bg-muted/30">
+                    <div className="flex flex-col items-center gap-2">
+                      <ImageIcon className="h-10 w-10 text-muted-foreground opacity-50" />
+                      <p className="text-sm font-medium">Syllabus Image Ready for Analysis</p>
+                      <Button variant="link" size="sm" onClick={() => { setSyllabusInput(''); setIsImageUpload(false); }}>
+                        Remove Image & Paste Text
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Textarea
+                    id="syllabus"
+                    placeholder="Paste syllabus modules, topics, and learning outcomes here..."
+                    className="min-h-[200px]"
+                    value={syllabusInput}
+                    onChange={(e) => setSyllabusInput(e.target.value)}
+                  />
+                )}
               </div>
               <Button 
                 onClick={handleSuggest} 
-                disabled={isSuggesting || syllabusInput.length < 50} 
+                disabled={isSuggesting || syllabusInput.length < 10} 
                 className="w-full"
               >
                 {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}

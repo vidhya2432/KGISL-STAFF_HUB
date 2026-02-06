@@ -14,7 +14,8 @@ import {z} from 'genkit';
 const SuggestRelevantAssignmentsInputSchema = z.object({
   syllabusContent: z
     .string()
-    .describe('The syllabus content for the course.'),
+    .describe('The syllabus content for the course (text or image data URI).'),
+  isImage: z.boolean().optional().describe('Whether the content is an image data URI.'),
 });
 export type SuggestRelevantAssignmentsInput = z.infer<
   typeof SuggestRelevantAssignmentsInputSchema
@@ -41,9 +42,15 @@ const assignmentSuggestionPrompt = ai.definePrompt({
   output: {schema: SuggestRelevantAssignmentsOutputSchema},
   prompt: `You are an AI assistant designed to suggest relevant assignments for a given course syllabus.
 
-  Based on the following syllabus content, suggest a list of assignments that would be engaging and effective for students:
+  Based on the following syllabus content, suggest a list of assignments that would be engaging and effective for students. 
+  Each suggestion should be a clear, actionable assignment question or task.
 
-  Syllabus Content: {{{syllabusContent}}}
+  {{#if isImage}}
+  Analyze the provided syllabus image: {{media url=syllabusContent}}
+  {{else}}
+  Analyze the following syllabus text:
+  {{{syllabusContent}}}
+  {{/if}}
 
   Please provide a list of suggested assignments.`,
 });

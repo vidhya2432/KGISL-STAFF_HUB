@@ -1,4 +1,3 @@
-
 'use server';
 
 import { detectPlagiarism, DetectPlagiarismInput } from '@/ai/flows/detect-plagiarism-in-submissions';
@@ -10,7 +9,8 @@ const plagiarismSchema = z.object({
 });
 
 const suggestionSchema = z.object({
-  syllabusContent: z.string().min(50, 'Syllabus content must be at least 50 characters.'),
+  syllabusContent: z.string().min(1, 'Content is required.'),
+  isImage: z.boolean().optional(),
 });
 
 export async function checkPlagiarismAction(prevState: any, formData: FormData) {
@@ -45,6 +45,7 @@ export async function checkPlagiarismAction(prevState: any, formData: FormData) 
 export async function suggestAssignmentsAction(prevState: any, formData: FormData) {
   const validatedFields = suggestionSchema.safeParse({
     syllabusContent: formData.get('syllabusContent'),
+    isImage: formData.get('isImage') === 'true',
   });
 
   if (!validatedFields.success) {
