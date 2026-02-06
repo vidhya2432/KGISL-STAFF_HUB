@@ -106,7 +106,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   useEffect(() => {
     const savedRoster = localStorage.getItem(`roster_${classId}`);
     if (savedRoster) setRoster(JSON.parse(savedRoster));
-    else setRoster([{ id: '1', name: 'Alice Johnson', roll: 'CS001' }, { id: '2', name: 'Bob Williams', roll: 'CS002' }]);
+    else setRoster([]);
 
     const savedAssignments = localStorage.getItem(`assignments_${classId}`);
     if (savedAssignments) {
@@ -211,39 +211,64 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     setIsRosterUploading(true);
     try {
       if (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data);
-        const rowData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]) as any[];
+        const dataBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(dataBuffer);
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
         
-        if (rowData.length === 0) {
+        if (rows.length === 0) {
           throw new Error('The spreadsheet appears to be empty.');
         }
 
-        // Robust column detection
-        const keys = Object.keys(rowData[0]);
-        const nameKey = keys.find(k => {
-          const low = k.toLowerCase().replace(/[^a-z]/g, '');
-          return low.includes('name') || low.includes('student') || low.includes('full');
-        });
-        const rollKey = keys.find(k => {
-          const low = k.toLowerCase().replace(/[^a-z]/g, '');
-          return low.includes('roll') || low.includes('id') || low.includes('no') || low.includes('number');
-        });
+        let headerRowIndex = -1;
+        let nameColIndex = -1;
+        let rollColIndex = -1;
 
-        const students = rowData.map(r => {
-          const nameVal = nameKey ? r[nameKey] : null;
-          const rollVal = rollKey ? r[rollKey] : null;
+        // Smart scan for headers in first 10 rows
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          const row = rows[i];
+          if (!row || !Array.isArray(row)) continue;
           
-          return {
-            id: Math.random().toString(36).substr(2, 9),
-            name: nameVal ? String(nameVal).trim() : 'Unknown',
-            roll: rollVal ? String(rollVal).trim() : 'N/A'
-          };
-        }).filter(s => s.name !== 'Unknown' || s.roll !== 'N/A');
+          for (let j = 0; j < row.length; j++) {
+            const cellVal = String(row[j] || '').toLowerCase().replace(/[^a-z]/g, '');
+            if (cellVal.includes('name') || cellVal.includes('student') || cellVal.includes('full')) nameColIndex = j;
+            if (cellVal.includes('roll') || cellVal.includes('id') || cellVal.includes('no') || cellVal.includes('number')) rollColIndex = j;
+          }
+          
+          if (nameColIndex !== -1 || rollColIndex !== -1) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        // Fallback: If no headers found, use first row and guess column positions
+        if (headerRowIndex === -1) {
+          headerRowIndex = -1; // Start from 0
+          rollColIndex = 0;
+          nameColIndex = rows[0]?.length > 1 ? 1 : 0;
+        }
+
+        const students = rows.slice(headerRowIndex + 1)
+          .map(row => {
+            const nameVal = nameColIndex !== -1 ? String(row[nameColIndex] || '').trim() : '';
+            const rollVal = rollColIndex !== -1 ? String(row[rollColIndex] || '').trim() : '';
+            
+            if (!nameVal && !rollVal) return null;
+            
+            return {
+              id: Math.random().toString(36).substr(2, 9),
+              name: nameVal || 'Unknown Student',
+              roll: rollVal || 'N/A'
+            };
+          })
+          .filter((s): s is Student => s !== null && (s.name !== 'Unknown Student' || s.roll !== 'N/A'));
+
+        if (students.length === 0) throw new Error('Could not extract student data. Please check your file headers.');
 
         saveRoster([...roster, ...students]);
         toast({ title: 'Roster Imported', description: `Added ${students.length} students from Excel.` });
       } else {
+        // AI extraction for PDF/Images
         let content = '';
         let isImage = false;
 
@@ -275,7 +300,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         }
       }
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Upload Failed', description: error.message || 'Failed to process file.' });
+      toast({ variant: 'destructive', title: 'Import Failed', description: error.message || 'Failed to process file.' });
     } finally {
       setIsRosterUploading(false);
       if (rosterFileInputRef.current) rosterFileInputRef.current.value = '';
