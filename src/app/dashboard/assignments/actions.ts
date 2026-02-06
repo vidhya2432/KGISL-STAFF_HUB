@@ -72,11 +72,14 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
   }
 }
 
-export async function syncFromDriveAction(classId: string, assignmentId: string) {
+export async function syncFromDriveAction(classId: string, assignmentId: string, driveLink: string) {
+  // Simulate connecting to the provided link
+  console.log(`Connecting to Google Drive link: ${driveLink} for class ${classId}`);
+  
   // Simulate an API call to Google Drive
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  await new Promise((resolve) => setTimeout(resolve, 3000));
 
-  // Mock data representing what might be found in a Google Drive folder
+  // Mock data representing what might be found in the specified Google Drive folder
   const mockStudents = [
     { id: 'S1', name: 'Alice Johnson', roll: 'CS001' },
     { id: 'S2', name: 'Bob Williams', roll: 'CS002' },
@@ -86,7 +89,7 @@ export async function syncFromDriveAction(classId: string, assignmentId: string)
   ];
 
   const syncResults = mockStudents.map((student) => {
-    const hasSubmitted = Math.random() > 0.2;
+    const hasSubmitted = Math.random() > 0.1; // Higher submission rate for mock
     if (!hasSubmitted) {
       return {
         studentId: student.id,
@@ -101,7 +104,7 @@ export async function syncFromDriveAction(classId: string, assignmentId: string)
 
     const isLate = Math.random() > 0.8;
     const marks = Math.floor(Math.random() * 40) + 60;
-    const plagiarismScore = Math.random() * 0.3; // Low plagiarism usually
+    const plagiarismScore = Math.random() * 0.25; // Random mock plagiarism score
 
     return {
       studentId: student.id,

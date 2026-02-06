@@ -6,9 +6,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { 
   Sparkles, 
   CloudDownload, 
@@ -16,11 +26,9 @@ import {
   FileText, 
   Users, 
   Loader2,
-  CheckCircle2,
-  AlertTriangle,
   Upload,
-  FileUp,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction } from '@/app/dashboard/assignments/actions';
 import { format, parseISO } from 'date-fns';
@@ -46,6 +54,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -105,21 +115,32 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const handleSyncDrive = async () => {
+    if (!driveLink) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing Link',
+        description: 'Please provide a valid Google Drive folder link.',
+      });
+      return;
+    }
+
     setIsSyncing(true);
+    setIsDialogOpen(false);
+    
     try {
-      const response = await syncFromDriveAction(classId, 'A1'); // Mock assignment ID
+      const response = await syncFromDriveAction(classId, 'A1', driveLink);
       if (response.success && response.data) {
         setSubmissions(response.data);
         toast({
           title: 'Google Drive Synced',
-          description: `Successfully analyzed submissions for ${response.data.length} students.`,
+          description: `Successfully analyzed submissions from ${driveLink.substring(0, 30)}...`,
         });
       }
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Sync Failed',
-        description: 'Could not connect to Google Drive or analyze files.',
+        description: 'Could not connect to the provided Google Drive link.',
       });
     } finally {
       setIsSyncing(false);
@@ -129,7 +150,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const handleSuggest = () => {
     if (!syllabusInput.trim()) return;
     
-    // Construct FormData and call the action dispatch within a transition
     const formData = new FormData();
     formData.append('syllabusContent', syllabusInput);
     formData.append('isImage', isImageUpload.toString());
@@ -252,10 +272,42 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <CardTitle>Student Roster & Submissions</CardTitle>
                 <CardDescription>Automated tracking linked to your connected Google Drive folder.</CardDescription>
               </div>
-              <Button onClick={handleSyncDrive} disabled={isSyncing}>
-                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
-                Sync from Drive
-              </Button>
+              
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button disabled={isSyncing}>
+                    {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CloudDownload className="mr-2 h-4 w-4" />}
+                    Sync from Drive
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Connect Google Drive Folder</DialogTitle>
+                    <DialogDescription>
+                      Enter the shareable link of the folder containing student assignment submissions.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="drive-link">Folder Link</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="drive-link"
+                          placeholder="https://drive.google.com/drive/folders/..."
+                          value={driveLink}
+                          onChange={(e) => setDriveLink(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleSyncDrive} disabled={!driveLink}>
+                      Start Analysis
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border">
@@ -302,7 +354,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                          No submission data synced yet. Click "Sync from Drive" to analyze student folders.
+                          No submission data synced yet. Click "Sync from Drive" and provide a folder link.
                         </TableCell>
                       </TableRow>
                     )}
