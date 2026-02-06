@@ -1,0 +1,43 @@
+
+{
+  "entities": {
+    "Class": {
+      "title": "Class",
+      "description": "Represents a group or section handled by a faculty member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "The label for the class (e.g., Grade 10-A)." },
+        "facultyId": { "type": "string" }
+      },
+      "required": ["id", "name", "facultyId"]
+    },
+    "TimetableEntry": {
+      "title": "Timetable Entry",
+      "description": "A specific scheduled class for a class group.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "day": { "type": "string", "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] },
+        "time": { "type": "string", "description": "Time slot (e.g., 10:00 - 11:30)." },
+        "course": { "type": "string" },
+        "location": { "type": "string" }
+      },
+      "required": ["id", "classId", "day", "time", "course"]
+    }
+  },
+  "auth": {
+    "providers": ["google.com"]
+  },
+  "firestore": {
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Collection of classes managed by faculty."
+    },
+    "/classes/{classId}/schedule/{entryId}": {
+      "schema": "TimetableEntry",
+      "description": "Timetable entries for a specific class."
+    }
+  }
+}
