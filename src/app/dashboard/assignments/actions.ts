@@ -1,8 +1,8 @@
-
 'use server';
 
 import { detectPlagiarism, DetectPlagiarismInput } from '@/ai/flows/detect-plagiarism-in-submissions';
 import { suggestRelevantAssignments, SuggestRelevantAssignmentsInput } from '@/ai/flows/suggest-relevant-assignments';
+import { extractStudentRoster } from '@/ai/flows/extract-student-roster-flow';
 import { z } from 'zod';
 
 const plagiarismSchema = z.object({
@@ -69,6 +69,21 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
       message: 'An error occurred while generating suggestions.',
       errors: null,
       data: null,
+    };
+  }
+}
+
+export async function extractRosterAction(content: string, isImage: boolean) {
+  try {
+    const result = await extractStudentRoster({ content, isImage });
+    return {
+      success: true,
+      data: result.students,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to extract roster',
     };
   }
 }

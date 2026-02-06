@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useActionState, useRef, startTransition, useEffect } from 'react';
@@ -23,20 +22,18 @@ import {
 import { 
   Sparkles, 
   CloudDownload, 
-  Search, 
   FileText, 
   Users, 
   Loader2,
   Upload,
   Image as ImageIcon,
   FileSearch,
-  CheckCircle2,
   Plus,
   Trash2,
-  UserPlus
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
-import { suggestAssignmentsAction, syncFromDriveAction } from '@/app/dashboard/assignments/actions';
-import { format, parseISO } from 'date-fns';
+import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
 
 // pdfjs initialization
@@ -68,6 +65,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [roster, setRoster] = useState<Student[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isRosterUploading, setIsRosterUploading] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<StudentSubmission | null>(null);
@@ -76,7 +74,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentRoll, setNewStudentRoll] = useState('');
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const syllabusFileInputRef = useRef<HTMLInputElement>(null);
+  const rosterFileInputRef = useRef<HTMLInputElement>(null);
 
   const [suggestionState, suggestionDispatch, isSuggesting] = useActionState(suggestAssignmentsAction, {
     message: null,
@@ -90,7 +89,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     if (saved) {
       setRoster(JSON.parse(saved));
     } else {
-      // Default mock roster if empty
       const initial = [
         { id: '1', name: 'Alice Johnson', roll: 'CS001' },
         { id: '2', name: 'Bob Williams', roll: 'CS002' },
@@ -98,7 +96,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       setRoster(initial);
       localStorage.setItem(`roster_${classId}`, JSON.stringify(initial));
     }
-    // Reset submissions when class changes
     setSubmissions([]);
     setDriveLink('');
   }, [classId]);
@@ -139,7 +136,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     return fullText;
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSyllabusUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -163,14 +160,52 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         throw new Error('Please upload a PDF or an Image file.');
       }
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Upload Failed',
-        description: error.message,
-      });
+      toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
     } finally {
       setIsExtracting(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (syllabusFileInputRef.current) syllabusFileInputRef.current.value = '';
+    }
+  };
+
+  const handleRosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsRosterUploading(true);
+    try {
+      let content = '';
+      let isImage = false;
+
+      if (file.type === 'application/pdf') {
+        content = await extractTextFromPdf(file);
+      } else if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        content = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        isImage = true;
+      } else {
+        throw new Error('Please upload a PDF or an Image file.');
+      }
+
+      const response = await extractRosterAction(content, isImage);
+      if (response.success && response.data) {
+        const newStudents = response.data.map((s: any) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          name: s.name,
+          roll: s.rollNumber,
+        }));
+        saveRoster([...roster, ...newStudents]);
+        toast({ title: 'Roster Automated', description: `Extracted ${newStudents.length} students automatically.` });
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Roster Import Failed', description: error.message });
+    } finally {
+      setIsRosterUploading(false);
+      if (rosterFileInputRef.current) rosterFileInputRef.current.value = '';
     }
   };
 
@@ -197,11 +232,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         });
       }
     } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Sync Failed',
-        description: 'Could not analyze files from the provided Drive link.',
-      });
+      toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not analyze files from the provided Drive link.' });
     } finally {
       setIsSyncing(false);
     }
@@ -249,13 +280,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   type="file"
                   accept=".pdf,image/*"
                   className="hidden"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
+                  ref={syllabusFileInputRef}
+                  onChange={handleSyllabusUpload}
                 />
                 <Button 
                   variant="outline" 
                   className="w-full flex-1" 
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => syllabusFileInputRef.current?.click()}
                   disabled={isExtracting || isSuggesting}
                 >
                   {isExtracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
@@ -310,9 +341,28 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
 
         <TabsContent value="roster" className="space-y-6 mt-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Manage Class Roster</CardTitle>
-              <CardDescription>Add your students below. Drive sync will use these details to find submissions.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Manage Class Roster</CardTitle>
+                <CardDescription>Add students manually or upload a student list document.</CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  ref={rosterFileInputRef}
+                  onChange={handleRosterUpload}
+                />
+                <Button 
+                  variant="secondary" 
+                  onClick={() => rosterFileInputRef.current?.click()}
+                  disabled={isRosterUploading}
+                >
+                  {isRosterUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
+                  Upload Student List (AI)
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -325,8 +375,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   <Input placeholder="e.g. John Doe" value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} />
                 </div>
               </div>
-              <Button onClick={addStudent} variant="secondary" className="w-full">
-                <Plus className="mr-2 h-4 w-4" /> Add Student to Roster
+              <Button onClick={addStudent} variant="outline" className="w-full">
+                <Plus className="mr-2 h-4 w-4" /> Add Student Manually
               </Button>
 
               <div className="rounded-md border mt-6">
@@ -353,7 +403,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                     {roster.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
-                          Roster is empty. Add students to get started.
+                          Roster is empty. Add students or upload a list to get started.
                         </TableCell>
                       </TableRow>
                     )}
