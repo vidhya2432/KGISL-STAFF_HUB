@@ -2,7 +2,7 @@
 
 import { detectPlagiarism, DetectPlagiarismInput } from '@/ai/flows/detect-plagiarism-in-submissions';
 import { suggestRelevantAssignments, SuggestRelevantAssignmentsInput } from '@/ai/flows/suggest-relevant-assignments';
-import { extractRosterAction as extractRosterFlow } from '@/ai/flows/extract-student-roster-flow';
+import { extractStudentRoster as extractRosterFlow } from '@/ai/flows/extract-student-roster-flow';
 import { z } from 'zod';
 
 const plagiarismSchema = z.object({
