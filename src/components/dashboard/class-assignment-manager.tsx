@@ -130,7 +130,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     if (savedAssignments) {
       const parsed = JSON.parse(savedAssignments);
       setAssignments(parsed);
-      if (parsed.length > 0) setActiveAssignmentId(parsed[0].id);
+      if (parsed.length > 0) setActiveAssignmentId(parsed[parsed.length - 1].id);
       else setActiveAssignmentId('');
     } else {
       setAssignments([]);
@@ -168,6 +168,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     if (!syllabusInput.trim() || !assignmentType || roster.length === 0) {
       if (roster.length === 0) {
         toast({ variant: 'destructive', title: 'Roster Required', description: 'Please add students to the roster first so AI knows how many topics to generate.' });
+      } else {
+        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide syllabus content and select an assignment type.' });
       }
       return;
     }
@@ -201,7 +203,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         mappings.push({
           assigneeName: student.name,
           assigneeId: student.roll,
-          topic: topics[index] || topics[topics.length - 1] || 'TBD'
+          topic: topics[index] || topics[topics.length - 1] || 'General Research Topic'
         });
       });
     } else {
@@ -213,7 +215,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         mappings.push({
           assigneeName: `${teamName} (${teamMembers.map(m => m.name).join(', ')})`,
           assigneeId: teamIds,
-          topic: topics[Math.floor(i / teamSize)] || topics[topics.length - 1] || 'TBD'
+          topic: topics[Math.floor(i / teamSize)] || topics[topics.length - 1] || 'General Team Topic'
         });
       }
     }
@@ -234,8 +236,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     setHideGenerationResult(true);
     
     toast({ 
-      title: 'Assignment Finalized', 
-      description: `Assigned ${mappings.length} unique topics. View them in the Grading Hub.` 
+      title: 'Assignment Saved', 
+      description: `Topic distribution is now active for ${mappings.length} entries. Check the Roster or Grading Hub.` 
     });
   };
 
@@ -276,10 +278,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       if (response.success && response.data) {
         const newMap = { ...submissionsMap, [activeAssignmentId]: response.data };
         saveSubmissions(newMap);
-        toast({ title: 'Analysis Complete', description: `Processed ${roster.length} students.` });
+        toast({ title: 'Sync Successful', description: `Processed ${roster.length} student files.` });
       }
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not analyze files.' });
+      toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not connect to the specified drive folder.' });
     } finally {
       setIsSyncing(false);
     }
@@ -342,6 +344,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           const nameValue = String(row[nameColIdx] || '').trim();
           const rollValue = String(row[rollColIdx] || '').trim();
           if (!nameValue && !rollValue) continue;
+          
+          // Skip if roll looks like mobile
+          if (rollValue.length > 9 && /^\d+$/.test(rollValue)) continue;
+
           extractedStudents.push({
             id: Math.random().toString(36).substr(2, 9),
             roll: rollValue || 'N/A',
@@ -374,7 +380,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             roll: s.rollNumber
           }));
           saveRoster(students);
-          toast({ title: 'Roster Updated', description: `AI extracted ${students.length} students.` });
+          toast({ title: 'AI Extraction Success', description: `Identified ${students.length} students.` });
         }
       }
     } catch (error: any) {
@@ -397,7 +403,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       plagiarismScore: null,
       fileName: null,
       aiFeedback: null
-    })) : [] // Teams are harder to auto-gen without sync
+    })) : []
   )) : [];
 
   return (
@@ -466,6 +472,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                         <SelectItem value="Research Paper">Research Paper</SelectItem>
                         <SelectItem value="Problem Set">Problem Set</SelectItem>
                         <SelectItem value="Essay">Essay</SelectItem>
+                        <SelectItem value="Practical Lab Report">Practical Lab Report</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -481,7 +488,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   {assignmentGrouping === 'Team' && (
                     <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                       <Label>Students per Team</Label>
-                      <Input type="number" min={2} max={10} value={teamSize} onChange={(e) => setTeamSize(parseInt(e.target.value))} />
+                      <Input type="number" min={2} max={15} value={teamSize} onChange={(e) => setTeamSize(parseInt(e.target.value))} />
                     </div>
                   )}
                 </div>
@@ -547,7 +554,12 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                           </div>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => downloadAssignmentSheet(a)}><Download className="h-4 w-4 mr-2" /> Download Mapping</Button>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setActiveAssignmentId(a.id)} className={activeAssignmentId === a.id ? 'bg-secondary' : ''}>
+                          {activeAssignmentId === a.id ? 'Active' : 'Select'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => downloadAssignmentSheet(a)}><Download className="h-4 w-4 mr-2" /> Download Mapping</Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
@@ -561,7 +573,9 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle>Class Roster</CardTitle>
-                <CardDescription>Add students manually or upload a list.</CardDescription>
+                <CardDescription>
+                  {activeAssignment ? `Currently showing topics for: ${activeAssignment.title}` : 'Add students manually or upload a list.'}
+                </CardDescription>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={clearRoster} className="text-destructive"><Eraser className="h-4 w-4 mr-2" /> Clear List</Button>
@@ -578,20 +592,35 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <Input placeholder="Full Name" className="flex-1" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} />
                 <Button variant="outline" onClick={addStudent}><Plus className="h-4 w-4" /></Button>
               </div>
-              <div className="rounded-md border max-h-[400px] overflow-auto">
+              <div className="rounded-md border max-h-[500px] overflow-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Roll No / ID</TableHead><TableHead>Name</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Roll No / ID</TableHead>
+                      <TableHead>Name</TableHead>
+                      {activeAssignment && <TableHead>Assigned Topic</TableHead>}
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
-                    {roster.map(s => (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-mono text-xs">{s.roll}</TableCell>
-                        <TableCell className="font-medium">{s.name}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {roster.length === 0 && <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">Roster is empty. Import a list to get started.</TableCell></TableRow>}
+                    {roster.map(s => {
+                      const mapping = activeAssignment?.mappings?.find(m => m.assigneeId.includes(s.roll));
+                      return (
+                        <TableRow key={s.id}>
+                          <TableCell className="font-mono text-xs">{s.roll}</TableCell>
+                          <TableCell className="font-medium">{s.name}</TableCell>
+                          {activeAssignment && (
+                            <TableCell className="text-sm italic text-muted-foreground max-w-[300px] truncate" title={mapping?.topic}>
+                              {mapping?.topic || 'TBD'}
+                            </TableCell>
+                          )}
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {roster.length === 0 && <TableRow><TableCell colSpan={activeAssignment ? 4 : 3} className="text-center py-8 text-muted-foreground italic">Roster is empty. Import a list to get started.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </div>
