@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef } from 'react';
@@ -14,7 +13,7 @@ import { toast } from '@/hooks/use-toast';
 
 // pdfjs initialization
 import * as pdfjsLib from 'pdfjs-dist';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 interface AnalysisResult {
   fileName: string;
@@ -36,7 +35,8 @@ export function PlagiarismChecker() {
   const extractTextFromPdf = async (file: File): Promise<string> => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
       let fullText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -80,8 +80,6 @@ export function PlagiarismChecker() {
         const formData = new FormData();
         formData.append('submissionText', text);
         
-        // Call the action. Note: useActionState is great for single forms, 
-        // but for batch we call the action directly if possible or wrap it.
         const response = await checkPlagiarismAction(null, formData);
         
         if (response.data) {
