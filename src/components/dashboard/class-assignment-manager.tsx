@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useActionState, useRef, startTransition, useEffect } from 'react';
@@ -41,7 +40,10 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   BookOpenCheck,
-  Eraser
+  Eraser,
+  Layers,
+  Users2,
+  User
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
@@ -60,6 +62,8 @@ interface Student {
 interface Assignment {
   id: string;
   title: string;
+  type: string;
+  grouping: 'Individual' | 'Team';
   createdAt: string;
 }
 
@@ -78,6 +82,9 @@ interface StudentSubmission {
 export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [syllabusInput, setSyllabusInput] = useState('');
   const [isImageUpload, setIsImageUpload] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<string>('');
+  const [assignmentGrouping, setAssignmentGrouping] = useState<'Individual' | 'Team'>('Individual');
+  
   const [roster, setRoster] = useState<Student[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string>('');
@@ -102,7 +109,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     data: null,
   });
 
-  // Load class-specific data when classId changes
   useEffect(() => {
     const savedRoster = localStorage.getItem(`roster_${classId}`);
     if (savedRoster) setRoster(JSON.parse(savedRoster));
@@ -123,9 +129,10 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     if (savedSubmissions) setSubmissionsMap(JSON.parse(savedSubmissions));
     else setSubmissionsMap({});
     
-    // Clear temporary inputs
     setSyllabusInput('');
     setDriveLink('');
+    setAssignmentType('');
+    setAssignmentGrouping('Individual');
   }, [classId]);
 
   const saveRoster = (newRoster: Student[]) => {
@@ -152,12 +159,14 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const newAssignment: Assignment = {
       id: Math.random().toString(36).substr(2, 9),
       title,
+      type: assignmentType,
+      grouping: assignmentGrouping,
       createdAt: new Date().toISOString(),
     };
     const updated = [...assignments, newAssignment];
     saveAssignments(updated);
     if (!activeAssignmentId) setActiveAssignmentId(newAssignment.id);
-    toast({ title: 'Assignment Created', description: `"${title}" added to class.` });
+    toast({ title: 'Assignment Created', description: `"${title}" added as ${assignmentType} (${assignmentGrouping}).` });
   };
 
   const addStudent = () => {
@@ -192,10 +201,12 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const handleSuggest = () => {
-    if (!syllabusInput.trim()) return;
+    if (!syllabusInput.trim() || !assignmentType) return;
     const formData = new FormData();
     formData.append('syllabusContent', syllabusInput);
     formData.append('isImage', isImageUpload.toString());
+    formData.append('assignmentType', assignmentType);
+    formData.append('grouping', assignmentGrouping);
     startTransition(() => {
       suggestionDispatch(formData);
     });
@@ -237,7 +248,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         const rollKeywords = ['roll', 'reg', 'enrol', 'admission', 'id', 'student id', 'uax', 'uad'];
         const skipKeywords = ['s.no', 'sno', 'sl.no', 'serial', 'index', 'mobile', 'phone', 'contact', 'whatsapp', 'email'];
 
-        // 1. SCAN FOR HEADERS
         for (let i = 0; i < Math.min(rows.length, 30); i++) {
           const row = rows[i];
           if (!row || row.length < 2) continue;
@@ -248,9 +258,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           for (let j = 0; j < row.length; j++) {
             const val = String(row[j] || '').toLowerCase().trim();
             if (val === '') continue;
-
             if (skipKeywords.some(k => val.includes(k))) continue;
-
             if (potentialNameIdx === -1 && nameKeywords.some(k => val.includes(k))) potentialNameIdx = j;
             if (potentialRollIdx === -1 && rollKeywords.some(k => val.includes(k))) potentialRollIdx = j;
           }
@@ -263,7 +271,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        // 2. FALLBACK PATTERN DETECTION
         if (nameColIdx === -1 || rollColIdx === -1) {
           for (let i = 0; i < Math.min(rows.length, 20); i++) {
             const row = rows[i];
@@ -313,8 +320,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           
           if (!nameValue && !rollValue) continue;
           if (nameKeywords.includes(nameValue.toLowerCase())) continue;
-
-          // Extra check: skip if it's a mobile number (approx 10 digits)
           if (/^\d{10}$/.test(rollValue)) continue;
 
           const key = `${rollValue}-${nameValue}`;
@@ -333,7 +338,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         saveRoster(extractedStudents);
         toast({ title: 'Roster Updated', description: `Imported ${extractedStudents.length} students to this class.` });
       } else {
-        // AI extraction for PDF/Images
         let content = '';
         let isImage = false;
 
@@ -372,6 +376,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     }
   };
 
+  const activeAssignment = assignments.find(a => a.id === activeAssignmentId);
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="syllabus">
@@ -385,58 +391,114 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           <Card>
             <CardHeader>
               <CardTitle>AI Assignment Architect</CardTitle>
-              <CardDescription>Upload syllabus to generate and formalize class assignments.</CardDescription>
+              <CardDescription>Upload syllabus and select assignment details to generate tasks.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <input type="file" accept=".pdf,image/*" className="hidden" ref={syllabusFileInputRef} onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setIsExtracting(true);
-                  try {
-                    if (file.type === 'application/pdf') {
-                      const arrayBuffer = await file.arrayBuffer();
-                      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                      let fullText = '';
-                      for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const content = await page.getTextContent();
-                        fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Step 1: Upload Course Content</Label>
+                    <input type="file" accept=".pdf,image/*" className="hidden" ref={syllabusFileInputRef} onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setIsExtracting(true);
+                      try {
+                        if (file.type === 'application/pdf') {
+                          const arrayBuffer = await file.arrayBuffer();
+                          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                          let fullText = '';
+                          for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const content = await page.getTextContent();
+                            fullText += content.items.map((item: any) => item.str).join(' ') + '\n';
+                          }
+                          setSyllabusInput(fullText);
+                          setIsImageUpload(false);
+                        } else {
+                          const reader = new FileReader();
+                          const dataUri = await new Promise<string>(r => { reader.onload = () => r(reader.result as string); reader.readAsDataURL(file); });
+                          setSyllabusInput(dataUri);
+                          setIsImageUpload(true);
+                        }
+                      } catch (err) {
+                        toast({ variant: 'destructive', title: 'Upload Error', description: 'Failed to read file.' });
+                      } finally {
+                        setIsExtracting(false);
                       }
-                      setSyllabusInput(fullText);
-                      setIsImageUpload(false);
-                    } else {
-                      const reader = new FileReader();
-                      const dataUri = await new Promise<string>(r => { reader.onload = () => r(reader.result as string); reader.readAsDataURL(file); });
-                      setSyllabusInput(dataUri);
-                      setIsImageUpload(true);
-                    }
-                  } catch (err) {
-                    toast({ variant: 'destructive', title: 'Upload Error', description: 'Failed to read file.' });
-                  } finally {
-                    setIsExtracting(false);
-                  }
-                }} />
-                <Button variant="outline" className="w-full" onClick={() => syllabusFileInputRef.current?.click()} disabled={isExtracting}>
-                  {isExtracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Upload Syllabus (PDF/IMG)
-                </Button>
+                    }} />
+                    <Button variant="outline" className="w-full" onClick={() => syllabusFileInputRef.current?.click()} disabled={isExtracting}>
+                      {isExtracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                      Upload Syllabus (PDF/IMG)
+                    </Button>
+                    <Textarea placeholder="Or paste syllabus here..." className="min-h-[120px]" value={syllabusInput} onChange={(e) => setSyllabusInput(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Step 2: Choose Assignment Type</Label>
+                    <Select value={assignmentType} onValueChange={setAssignmentType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Case Study">Case Study</SelectItem>
+                        <SelectItem value="Research Paper">Research Paper</SelectItem>
+                        <SelectItem value="Sums / Problem Set">Sums / Problem Set</SelectItem>
+                        <SelectItem value="Essay">Essay</SelectItem>
+                        <SelectItem value="Practical Lab Report">Practical Lab Report</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {assignmentType && (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <Label>Step 3: Mode of Delivery</Label>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant={assignmentGrouping === 'Individual' ? 'default' : 'outline'} 
+                          className="flex-1"
+                          onClick={() => setAssignmentGrouping('Individual')}
+                        >
+                          <User className="mr-2 h-4 w-4" /> Individual
+                        </Button>
+                        <Button 
+                          variant={assignmentGrouping === 'Team' ? 'default' : 'outline'} 
+                          className="flex-1"
+                          onClick={() => setAssignmentGrouping('Team')}
+                        >
+                          <Users2 className="mr-2 h-4 w-4" /> Team
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <Textarea placeholder="Or paste syllabus here..." className="min-h-[100px]" value={syllabusInput} onChange={(e) => setSyllabusInput(e.target.value)} />
-              <Button onClick={handleSuggest} disabled={isSuggesting || syllabusInput.length < 5} className="w-full">
+
+              <Button 
+                onClick={handleSuggest} 
+                disabled={isSuggesting || syllabusInput.length < 5 || !assignmentType} 
+                className="w-full"
+              >
                 {isSuggesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Generate Assignments
+                Generate {assignmentType || 'Assignment'} Suggestions
               </Button>
             </CardContent>
           </Card>
 
           {suggestionState.data?.suggestedAssignments && (
             <div className="grid gap-4">
-              <h3 className="font-bold flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" /> AI Suggested Tasks</h3>
+              <h3 className="font-bold flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" /> AI Suggested Tasks ({assignmentType})</h3>
               {suggestionState.data.suggestedAssignments.map((q: string, i: number) => (
                 <Card key={i} className="hover:border-primary/50 transition-colors">
                   <CardContent className="p-4 flex items-center justify-between gap-4">
-                    <p className="text-sm font-medium">{q}</p>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{q}</p>
+                      <div className="flex gap-2 mt-1">
+                        <Badge variant="outline" className="text-[10px] h-4">{assignmentType}</Badge>
+                        <Badge variant="outline" className="text-[10px] h-4">{assignmentGrouping}</Badge>
+                      </div>
+                    </div>
                     <Button size="sm" onClick={() => handleAddAssignment(q)} variant="secondary">
                       <Plus className="h-3.5 w-3.5 mr-1" /> Add to Class
                     </Button>
@@ -457,7 +519,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={clearRoster} className="text-destructive">
                   <Eraser className="h-4 w-4 mr-2" />
-                  Clear Roster
+                  Clear List
                 </Button>
                 <input 
                   type="file" 
@@ -525,7 +587,11 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   <Select value={activeAssignmentId} onValueChange={setActiveAssignmentId}>
                     <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select Assignment" /></SelectTrigger>
                     <SelectContent>
-                      {assignments.map(a => <SelectItem key={a.id} value={a.id}>{a.title}</SelectItem>)}
+                      {assignments.map(a => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.title.length > 30 ? a.title.substring(0, 30) + '...' : a.title}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Dialog open={isDriveDialogOpen} onOpenChange={setIsDriveDialogOpen}>
@@ -547,6 +613,17 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 </div>
               </CardHeader>
               <CardContent>
+                {activeAssignment && (
+                  <div className="mb-4 flex gap-4">
+                    <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">
+                      <Layers className="h-3 w-3" /> {activeAssignment.type}
+                    </Badge>
+                    <Badge variant="secondary" className="flex gap-1 items-center px-3 py-1">
+                      {activeAssignment.grouping === 'Individual' ? <User className="h-3 w-3" /> : <Users2 className="h-3 w-3" />}
+                      {activeAssignment.grouping} Assignment
+                    </Badge>
+                  </div>
+                )}
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -597,9 +674,29 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           <DialogHeader><DialogTitle>Detailed Analysis Result</DialogTitle></DialogHeader>
           {selectedSubmission && (
             <div className="space-y-4 py-4">
-              <div className="flex justify-between border-b pb-2"><span className="font-bold">{selectedSubmission.studentName}</span><span className="text-primary font-bold">Grade: {selectedSubmission.marks}/100</span></div>
-              <div className="space-y-2"><p className="text-xs font-bold uppercase text-muted-foreground">AI Evaluator Feedback</p><div className="text-sm italic p-4 bg-secondary/50 rounded-lg border">"{selectedSubmission.aiFeedback}"</div></div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Source File: {selectedSubmission.fileName}</span><span>Status: {selectedSubmission.status}</span></div>
+              <div className="flex justify-between border-b pb-2">
+                <div>
+                  <span className="font-bold block">{selectedSubmission.studentName}</span>
+                  <span className="text-xs text-muted-foreground">Assignment: {activeAssignment?.title}</span>
+                </div>
+                <span className="text-primary font-bold text-xl">Grade: {selectedSubmission.marks}/100</span>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" /> AI Evaluator Feedback
+                </p>
+                <div className="text-sm italic p-4 bg-secondary/50 rounded-lg border">"{selectedSubmission.aiFeedback}"</div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
+                <div className="flex flex-col gap-1">
+                  <span className="font-bold uppercase">Source File</span>
+                  <span className="truncate">{selectedSubmission.fileName}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="font-bold uppercase">Submission Status</span>
+                  <span>{selectedSubmission.status}</span>
+                </div>
+              </div>
             </div>
           )}
           <DialogFooter><Button onClick={() => setSelectedSubmission(null)}>Close Report</Button></DialogFooter>

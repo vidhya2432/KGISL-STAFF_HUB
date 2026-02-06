@@ -12,6 +12,8 @@ const plagiarismSchema = z.object({
 const suggestionSchema = z.object({
   syllabusContent: z.string().min(1, 'Content is required.'),
   isImage: z.boolean().optional(),
+  assignmentType: z.string().min(1, 'Assignment type is required.'),
+  grouping: z.enum(['Individual', 'Team']),
 });
 
 export async function checkPlagiarismAction(prevState: any, formData: FormData) {
@@ -47,6 +49,8 @@ export async function suggestAssignmentsAction(prevState: any, formData: FormDat
   const validatedFields = suggestionSchema.safeParse({
     syllabusContent: formData.get('syllabusContent'),
     isImage: formData.get('isImage') === 'true',
+    assignmentType: formData.get('assignmentType'),
+    grouping: formData.get('grouping'),
   });
 
   if (!validatedFields.success) {

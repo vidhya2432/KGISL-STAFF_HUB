@@ -16,6 +16,8 @@ const SuggestRelevantAssignmentsInputSchema = z.object({
     .string()
     .describe('The syllabus content for the course (text or image data URI).'),
   isImage: z.boolean().optional().describe('Whether the content is an image data URI.'),
+  assignmentType: z.string().describe('The type of assignment to generate (e.g., Case Study, Research Paper, Sums).'),
+  grouping: z.enum(['Individual', 'Team']).describe('Whether the assignment is for individuals or teams.'),
 });
 export type SuggestRelevantAssignmentsInput = z.infer<
   typeof SuggestRelevantAssignmentsInputSchema
@@ -24,7 +26,7 @@ export type SuggestRelevantAssignmentsInput = z.infer<
 const SuggestRelevantAssignmentsOutputSchema = z.object({
   suggestedAssignments: z
     .array(z.string())
-    .describe('A list of suggested assignments relevant to the syllabus content.'),
+    .describe('A list of suggested assignments relevant to the syllabus content and chosen parameters.'),
 });
 export type SuggestRelevantAssignmentsOutput = z.infer<
   typeof SuggestRelevantAssignmentsOutputSchema
@@ -42,7 +44,9 @@ const assignmentSuggestionPrompt = ai.definePrompt({
   output: {schema: SuggestRelevantAssignmentsOutputSchema},
   prompt: `You are an AI assistant designed to suggest relevant assignments for a given course syllabus.
 
-  Based on the following syllabus content, suggest a list of assignments that would be engaging and effective for students. 
+  Based on the following syllabus content, suggest a list of assignments that are specifically of type: {{{assignmentType}}}.
+  The assignments should be designed for {{{grouping}}} work.
+  
   Each suggestion should be a clear, actionable assignment question or task.
 
   {{#if isImage}}
@@ -52,7 +56,7 @@ const assignmentSuggestionPrompt = ai.definePrompt({
   {{{syllabusContent}}}
   {{/if}}
 
-  Please provide a list of suggested assignments.`,
+  Please provide a list of suggested assignments in the requested format.`,
 });
 
 const suggestRelevantAssignmentsFlow = ai.defineFlow(
