@@ -1,18 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import {
-  Bell,
-  Home,
-  LineChart,
-  Package,
-  Package2,
-  PanelLeft,
-  Search,
-  Settings,
-  ShoppingCart,
-  Users,
-} from 'lucide-react';
-import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,20 +10,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { usePathname } from 'next/navigation';
-import {
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
 
 const pageTitles: { [key: string]: string } = {
-  '/dashboard': 'Dashboard',
-  '/dashboard/timetable': 'Timetable',
-  '/dashboard/assignments': 'Assignments',
-  '/dashboard/performance': 'Performance Tracking',
-  '/dashboard/notifications': 'Notifications',
+  '/dashboard': 'Dashboard Overview',
+  '/dashboard/timetable': 'Weekly Timetable',
+  '/dashboard/assignments': 'Assignment Management',
+  '/dashboard/performance': 'Performance Analytics',
+  '/dashboard/notifications': 'Notifications & Alerts',
 };
 
 export function Header() {
@@ -49,41 +33,47 @@ export function Header() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-card px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-      <SidebarTrigger className="sm:hidden" />
-      <div className="relative flex-1 md:grow-0">
-         <h1 className="text-2xl font-semibold font-headline">{pageTitles[pathname] || 'AcademiaLink'}</h1>
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 md:px-6">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-2 h-4" />
+      <div className="flex-1">
+        <h1 className="text-xl font-bold font-headline tracking-tight">
+          {pageTitles[pathname] || 'AcademiaLink'}
+        </h1>
       </div>
-      <div className="flex items-center gap-4 md:ml-auto md:grow-0">
+      <div className="flex items-center gap-4">
         {mounted ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 size="icon"
-                className="overflow-hidden rounded-full"
+                className="overflow-hidden rounded-full h-9 w-9"
               >
                 <Image
                   src={userAvatar?.imageUrl || '/placeholder.svg'}
-                  width={40}
-                  height={40}
+                  width={36}
+                  height={36}
                   alt={userAvatar?.description || 'User avatar'}
                   data-ai-hint={userAvatar?.imageHint}
-                  className="overflow-hidden rounded-full"
+                  className="aspect-square object-cover"
                 />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuItem>Profile Settings</DropdownMenuItem>
+              <DropdownMenuItem>Academic Preferences</DropdownMenuItem>
+              <DropdownMenuItem>Help & Support</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Logout</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive">
+                Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+          <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
         )}
       </div>
     </header>
