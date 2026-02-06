@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useActionState, useRef } from 'react';
+import { useState, useActionState, useRef, startTransition } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -126,12 +126,17 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     }
   };
 
-  const handleSuggest = async () => {
+  const handleSuggest = () => {
     if (!syllabusInput.trim()) return;
+    
+    // Construct FormData and call the action dispatch within a transition
     const formData = new FormData();
     formData.append('syllabusContent', syllabusInput);
     formData.append('isImage', isImageUpload.toString());
-    suggestionDispatch(formData);
+    
+    startTransition(() => {
+      suggestionDispatch(formData);
+    });
   };
 
   return (
