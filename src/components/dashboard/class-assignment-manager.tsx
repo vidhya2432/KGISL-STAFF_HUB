@@ -40,7 +40,8 @@ import {
   UserPlus,
   FileSpreadsheet,
   CheckCircle2,
-  BookOpenCheck
+  BookOpenCheck,
+  Eraser
 } from 'lucide-react';
 import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
@@ -124,6 +125,11 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const saveRoster = (newRoster: Student[]) => {
     setRoster(newRoster);
     localStorage.setItem(`roster_${classId}`, JSON.stringify(newRoster));
+  };
+
+  const clearRoster = () => {
+    saveRoster([]);
+    toast({ title: 'Roster Cleared', description: 'All student data for this class has been removed.' });
   };
 
   const saveAssignments = (newAssignments: Assignment[]) => {
@@ -221,12 +227,12 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         let rollColIdx = -1;
         let headerRowIdx = -1;
 
-        // Keywords for smart detection
+        // More specific keywords for better accuracy
         const nameKeywords = ['name', 'student', 'candidate', 'full name', 'member'];
-        const rollKeywords = ['roll', 'registration', 'reg', 'enrol', 'uax', 'uad', 'admission', 'id'];
-        const skipKeywords = ['s.no', 'sno', 'sl.no', 'serial', 'index'];
+        const rollKeywords = ['roll', 'reg', 'enrol', 'admission', 'id', 'student id', 'uax', 'uad'];
+        const skipKeywords = ['s.no', 'sno', 'sl.no', 'serial', 'index', 'mobile', 'phone', 'contact', 'whatsapp', 'email'];
 
-        // 1. SCAN FOR HEADERS (Searching deeper if needed)
+        // 1. SCAN FOR HEADERS
         for (let i = 0; i < Math.min(rows.length, 30); i++) {
           const row = rows[i];
           if (!row || row.length < 2) continue;
@@ -238,14 +244,14 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             const val = String(row[j] || '').toLowerCase().trim();
             if (val === '') continue;
 
-            // Specifically avoid S.No columns
-            if (skipKeywords.some(k => val === k || val.startsWith(k))) continue;
+            // Specifically avoid serial number or contact number columns
+            if (skipKeywords.some(k => val.includes(k))) continue;
 
             if (potentialNameIdx === -1 && nameKeywords.some(k => val.includes(k))) potentialNameIdx = j;
             if (potentialRollIdx === -1 && rollKeywords.some(k => val.includes(k))) potentialRollIdx = j;
           }
 
-          if (potentialNameIdx !== -1 || potentialRollIdx !== -1) {
+          if (potentialNameIdx !== -1 && potentialRollIdx !== -1) {
             nameColIdx = potentialNameIdx;
             rollColIdx = potentialRollIdx;
             headerRowIdx = i;
@@ -253,27 +259,30 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        // 2. FALLBACK PATTERN DETECTION (If headers aren't clear)
+        // 2. FALLBACK PATTERN DETECTION (Improved to skip mobile numbers)
         if (nameColIdx === -1 || rollColIdx === -1) {
           for (let i = 0; i < Math.min(rows.length, 20); i++) {
             const row = rows[i];
             if (!row || row.length < 2) continue;
 
-            let colCandidates: { idx: number; type: 'serial' | 'roll' | 'name' }[] = [];
+            let colCandidates: { idx: number; type: 'serial' | 'roll' | 'name' | 'mobile' }[] = [];
 
             for (let j = 0; j < row.length; j++) {
               const val = String(row[j] || '').trim();
               if (val.length === 0) continue;
 
-              const isSequentialInt = /^\d+$/.test(val) && parseInt(val) < 100;
+              const isSequentialInt = /^\d+$/.test(val) && parseInt(val) < 200; // Small numbers are likely serials
+              const isMobile = /^\d{10}$/.test(val) || (val.length >= 10 && /^\d+$/.test(val)); // 10 digits are likely mobiles
               const hasDigits = /\d/.test(val);
               const isAlpha = /^[a-zA-Z\s.]+$/.test(val);
               
-              if (isSequentialInt) colCandidates.push({ idx: j, type: 'serial' });
+              if (isMobile) colCandidates.push({ idx: j, type: 'mobile' });
+              else if (isSequentialInt) colCandidates.push({ idx: j, type: 'serial' });
               else if (hasDigits && val.length > 2) colCandidates.push({ idx: j, type: 'roll' });
               else if (isAlpha && val.length > 3) colCandidates.push({ idx: j, type: 'name' });
             }
 
+            // Prefer columns that aren't mobile or serial
             const bestName = colCandidates.find(c => c.type === 'name');
             const bestRoll = colCandidates.find(c => c.type === 'roll');
 
@@ -317,8 +326,9 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
 
         if (extractedStudents.length === 0) throw new Error('Could not extract any student data.');
         
-        saveRoster([...roster, ...extractedStudents]);
-        toast({ title: 'Roster Updated', description: `Imported ${extractedStudents.length} students.` });
+        // REPLACE roster with newly uploaded one
+        saveRoster(extractedStudents);
+        toast({ title: 'Roster Replaced', description: `Imported ${extractedStudents.length} students from file.` });
       } else {
         // AI extraction for PDF/Images
         let content = '';
@@ -345,8 +355,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
             name: s.name,
             roll: s.rollNumber
           }));
-          saveRoster([...roster, ...students]);
-          toast({ title: 'AI Extraction Success', description: `Extracted ${students.length} students.` });
+          saveRoster(students); // REPLACE
+          toast({ title: 'Roster Replaced', description: `AI extracted ${students.length} students.` });
         } else {
           throw new Error(response.error);
         }
@@ -441,17 +451,23 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <CardTitle>Student Directory</CardTitle>
                 <CardDescription>Populate the roster for automated tracking.</CardDescription>
               </div>
-              <input 
-                type="file" 
-                accept=".xlsx,.xls,.csv,.pdf,image/*" 
-                className="hidden" 
-                ref={rosterFileInputRef} 
-                onChange={handleRosterUpload} 
-              />
-              <Button variant="secondary" onClick={() => rosterFileInputRef.current?.click()} disabled={isRosterUploading}>
-                {isRosterUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
-                Import Roster
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={clearRoster} className="text-destructive">
+                  <Eraser className="h-4 w-4 mr-2" />
+                  Clear List
+                </Button>
+                <input 
+                  type="file" 
+                  accept=".xlsx,.xls,.csv,.pdf,image/*" 
+                  className="hidden" 
+                  ref={rosterFileInputRef} 
+                  onChange={handleRosterUpload} 
+                />
+                <Button variant="secondary" size="sm" onClick={() => rosterFileInputRef.current?.click()} disabled={isRosterUploading}>
+                  {isRosterUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
+                  Import & Replace
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
@@ -463,7 +479,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Roll No</TableHead>
+                      <TableHead>Roll No / ID</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -471,7 +487,7 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
                   <TableBody>
                     {roster.map(s => (
                       <TableRow key={s.id}>
-                        <TableCell className="font-mono">{s.roll}</TableCell>
+                        <TableCell className="font-mono text-xs">{s.roll}</TableCell>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => saveRoster(roster.filter(x => x.id !== s.id))}>
