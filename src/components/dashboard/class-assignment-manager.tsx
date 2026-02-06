@@ -205,8 +205,11 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsRosterUploading(true);
+    
     try {
-      if (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
+      const isExcel = file.name.match(/\.(xlsx|xls|csv)$/i);
+      
+      if (isExcel) {
         const dataBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(dataBuffer);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -218,14 +221,14 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
         let rollColIdx = -1;
         let headerRowIdx = -1;
 
-        // More aggressive header detection
+        // Smart Header Search: Look for common keywords in the first 20 rows
         for (let i = 0; i < Math.min(rows.length, 20); i++) {
           const row = rows[i];
           if (!row) continue;
           for (let j = 0; j < row.length; j++) {
-            const val = String(row[j] || '').toLowerCase();
-            if (val.includes('name') || val.includes('student')) nameColIdx = j;
-            if (val.includes('roll') || val.includes('no') || val.includes('id') || val.includes('number')) rollColIdx = j;
+            const val = String(row[j] || '').toLowerCase().trim();
+            if (nameColIdx === -1 && (val.includes('name') || val.includes('student') || val === 'full name')) nameColIdx = j;
+            if (rollColIdx === -1 && (val.includes('roll') || val.includes('no') || val.includes('id') || val.includes('number'))) rollColIdx = j;
           }
           if (nameColIdx !== -1 || rollColIdx !== -1) {
             headerRowIdx = i;
@@ -233,17 +236,30 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        // Fallback: If no headers found, guess columns 0 and 1
+        // Robust Fallback: If no clear headers found, try to find the first row with at least 2 non-empty cells
         if (headerRowIdx === -1) {
-          headerRowIdx = -1; 
+          for (let i = 0; i < rows.length; i++) {
+            const nonEmpies = rows[i]?.filter(cell => String(cell).trim().length > 0) || [];
+            if (nonEmpies.length >= 2) {
+              headerRowIdx = i - 1; // Data starts at i
+              rollColIdx = 0;
+              nameColIdx = 1;
+              break;
+            }
+          }
+        }
+
+        // If still nothing, just guess 0 and 1
+        if (headerRowIdx === -1) {
+          headerRowIdx = -1;
           rollColIdx = 0;
-          nameColIdx = rows[0]?.length > 1 ? 1 : 0;
+          nameColIdx = 1;
         }
 
         const extractedStudents: Student[] = [];
         for (let i = headerRowIdx + 1; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.every(cell => !cell)) continue;
+          if (!row) continue;
           
           const rollValue = String(row[rollColIdx] || '').trim();
           const nameValue = String(row[nameColIdx] || '').trim();
@@ -257,7 +273,8 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
           }
         }
 
-        if (extractedStudents.length === 0) throw new Error('Could not find any student data in the file.');
+        if (extractedStudents.length === 0) throw new Error('Could not extract any student data from the spreadsheet.');
+        
         saveRoster([...roster, ...extractedStudents]);
         toast({ title: 'Roster Updated', description: `Successfully imported ${extractedStudents.length} students.` });
       } else {
