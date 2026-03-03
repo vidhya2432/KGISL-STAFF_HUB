@@ -41,13 +41,13 @@
 }
 
 .apple-nav-link {
-  @apply text-[12px] font-normal text-[#1d1d1f]/80 hover:text-[#1d1d1f] transition-colors;
+  @apply text-[14px] font-normal text-[#1d1d1f]/70 hover:text-[#1d1d1f] transition-colors tracking-tight;
 }
 
 .apple-button-primary {
-  @apply bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-full px-5 py-2 text-sm font-medium transition-all;
+  @apply bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-full px-6 py-2.5 text-[15px] font-medium transition-all;
 }
 
 .apple-button-secondary {
-  @apply border border-[#0071e3] text-[#0071e3] hover:bg-[#f5f5f7] rounded-full px-5 py-2 text-sm font-medium transition-all;
+  @apply border border-[#0071e3] text-[#0071e3] hover:bg-[#f5f5f7] rounded-full px-6 py-2.5 text-[15px] font-medium transition-all;
 }

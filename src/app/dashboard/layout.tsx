@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search, ShoppingBag, Apple } from 'lucide-react';
+import { Search, GraduationCap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FirebaseClientProvider } from '@/firebase';
 
@@ -25,26 +25,22 @@ export default function DashboardLayout({
   return (
     <FirebaseClientProvider>
       <div className="min-h-screen bg-[#f5f5f7]">
-        {/* Top Banner Tip */}
-        <div className="bg-[#f5f5f7] text-[12px] py-3 text-center px-4 text-[#1d1d1f]/80">
-          Get up to 6 months of No Cost EMI* plus up to ₹10000 instant cashback* on selected products. <Link href="#" className="text-[#0066cc] hover:underline ml-1">Shop ›</Link>
-        </div>
-
         {/* Global Navigation */}
-        <nav className="sticky top-0 z-50 bg-[#f5f5f7]/80 backdrop-blur-md border-b border-transparent">
-          <div className="max-w-[1024px] mx-auto px-6 h-11 flex items-center justify-between">
-            <Link href="/dashboard" className="flex items-center hover:opacity-70 transition-opacity">
-              <Apple className="h-4 w-4 fill-current" />
+        <nav className="sticky top-0 z-50 bg-[#f5f5f7]/90 backdrop-blur-md border-b border-[#d2d2d7]">
+          <div className="max-w-[1024px] mx-auto px-6 h-12 flex items-center justify-between">
+            <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
+              <GraduationCap className="h-5 w-5 text-[#1d1d1f]" />
+              <span className="font-semibold text-[#1d1d1f] tracking-tight">AcademiaLink</span>
             </Link>
             
-            <ul className="hidden md:flex items-center gap-8">
+            <ul className="hidden md:flex items-center gap-10">
               {navItems.map((item) => (
                 <li key={item.href}>
                   <Link 
                     href={item.href}
                     className={cn(
                       "apple-nav-link",
-                      pathname === item.href && "text-[#1d1d1f] font-medium"
+                      pathname === item.href && "text-[#1d1d1f] font-semibold"
                     )}
                   >
                     {item.label}
@@ -55,10 +51,7 @@ export default function DashboardLayout({
 
             <div className="flex items-center gap-6 text-[#1d1d1f]/80">
               <button className="hover:text-[#1d1d1f] transition-colors">
-                <Search className="h-4 w-4" />
-              </button>
-              <button className="hover:text-[#1d1d1f] transition-colors">
-                <ShoppingBag className="h-4 w-4" />
+                <Search className="h-5 w-5" />
               </button>
             </div>
           </div>
