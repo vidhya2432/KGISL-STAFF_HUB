@@ -32,9 +32,9 @@ export default function PerformancePage() {
             <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#0071e3]">
               <SelectValue placeholder="Choose a class group..." />
             </SelectTrigger>
-            <SelectContent className="rounded-3xl shadow-2xl border-[#d2d2d7] bg-white">
+            <SelectContent className="rounded-3xl shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
               {classes.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7] text-[#1d1d1f] font-medium py-3">
+                <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7] focus:text-[#1d1d1f] text-[#1d1d1f] font-medium py-3">
                   {c.name}
                 </SelectItem>
               ))}

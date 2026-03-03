@@ -32,17 +32,14 @@ export default function AssignmentsPage() {
     
     const className = newClassName.trim();
     
-    // Optimistically close and clear for a snappy experience
-    setIsAddClassOpen(false);
-    setNewClassName('');
-
     addDoc(collection(db, 'classes'), {
       name: className,
-      facultyId: 'demo-user', // Hardcoded for demo/MVP
+      facultyId: 'demo-user',
       createdAt: serverTimestamp(),
     })
     .then((docRef) => {
-      // Automatically select the new class
+      setIsAddClassOpen(false);
+      setNewClassName('');
       setSelectedClassId(docRef.id);
       toast({ 
         title: 'Class created', 
@@ -118,9 +115,9 @@ export default function AssignmentsPage() {
               <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#0071e3]">
                 <SelectValue placeholder="Choose a class..." />
               </SelectTrigger>
-              <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7] bg-white">
+              <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
                 {classesData?.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7] text-[#1d1d1f] font-medium py-3">
+                  <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7] focus:text-[#1d1d1f] text-[#1d1d1f] font-medium py-3">
                     {c.name}
                   </SelectItem>
                 ))}
