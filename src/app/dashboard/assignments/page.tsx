@@ -30,55 +30,79 @@ export default function AssignmentsPage() {
   const handleAddClass = () => {
     if (!newClassName.trim() || !db) return;
     
+    const className = newClassName.trim();
+    
+    // Optimistically close and clear for a snappy experience
+    setIsAddClassOpen(false);
+    setNewClassName('');
+
     addDoc(collection(db, 'classes'), {
-      name: newClassName,
+      name: className,
       facultyId: 'demo-user', // Hardcoded for demo/MVP
       createdAt: serverTimestamp(),
-    }).then(() => {
-      setNewClassName('');
-      setIsAddClassOpen(false);
-      toast({ title: 'Class created', description: `${newClassName} has been added successfully.` });
+    })
+    .then((docRef) => {
+      // Automatically select the new class
+      setSelectedClassId(docRef.id);
+      toast({ 
+        title: 'Class created', 
+        description: `${className} has been added and selected.` 
+      });
+    })
+    .catch((error) => {
+      console.error("Error adding class: ", error);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Error', 
+        description: 'Failed to create class. Please try again.' 
+      });
     });
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-24">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-24 pt-12">
       <section className="text-center space-y-6">
-        <h1 className="text-5xl font-bold tracking-tight">Assignment Management</h1>
-        <p className="text-xl text-muted-foreground font-medium max-w-xl mx-auto">
+        <h1 className="text-5xl font-bold tracking-tight text-[#1d1d1f]">Assignment Management</h1>
+        <p className="text-xl text-[#86868b] font-medium max-w-xl mx-auto leading-relaxed">
           Distribute unique topics, automate roster management, and analyze student performance.
         </p>
         
         <div className="pt-4 flex items-center justify-center gap-4">
           <Dialog open={isAddClassOpen} onOpenChange={setIsAddClassOpen}>
             <DialogTrigger asChild>
-              <button className="bg-primary text-primary-foreground px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity inline-flex items-center gap-2">
+              <button className="apple-button-primary inline-flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Add New Class
               </button>
             </DialogTrigger>
-            <DialogContent className="rounded-3xl">
+            <DialogContent className="rounded-[32px] p-8 border-[#d2d2d7]">
               <DialogHeader>
-                <DialogTitle>Add New Class</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="text-2xl font-bold">Add New Class</DialogTitle>
+                <DialogDescription className="text-base text-[#86868b]">
                   Create a new class group to manage specific student cohorts.
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-6">
-                <div className="space-y-2">
-                  <Label htmlFor="new-class-name">Class Name</Label>
+              <div className="py-8">
+                <div className="space-y-3">
+                  <Label htmlFor="new-class-name" className="text-sm font-bold uppercase tracking-wider text-[#86868b]">Class Name</Label>
                   <Input
                     id="new-class-name"
                     placeholder="e.g. Advanced Algorithms (Section A)"
                     value={newClassName}
                     onChange={(e) => setNewClassName(e.target.value)}
-                    className="rounded-xl"
+                    className="rounded-2xl h-12 bg-[#f5f5f7] border-none px-5 focus-visible:ring-1 focus-visible:ring-[#0071e3]"
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setIsAddClassOpen(false)} className="rounded-full">Cancel</Button>
-                <Button onClick={handleAddClass} disabled={!newClassName.trim()} className="rounded-full px-8">Create</Button>
+              <DialogFooter className="gap-3">
+                <Button variant="ghost" onClick={() => setIsAddClassOpen(false)} className="rounded-full px-6">Cancel</Button>
+                <button 
+                  onClick={handleAddClass} 
+                  disabled={!newClassName.trim()} 
+                  className="apple-button-primary px-10 disabled:opacity-50"
+                >
+                  Create
+                </button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -87,16 +111,16 @@ export default function AssignmentsPage() {
 
       <section className="space-y-12">
         <div className="flex flex-col items-center gap-6">
-          <div className="inline-flex items-center gap-4 bg-secondary/50 px-6 py-3 rounded-full border">
-            <GraduationCap className="h-5 w-5 text-primary" />
-            <span className="text-sm font-bold tracking-tight uppercase">Select Class:</span>
+          <div className="inline-flex items-center gap-4 bg-[#f5f5f7] px-8 py-4 rounded-full border border-[#d2d2d7] shadow-sm">
+            <GraduationCap className="h-5 w-5 text-[#0071e3]" />
+            <span className="text-sm font-bold tracking-tight uppercase text-[#1d1d1f]">Select Class:</span>
             <Select value={selectedClassId || ''} onValueChange={setSelectedClassId}>
-              <SelectTrigger className="w-[240px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold">
+              <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#0071e3]">
                 <SelectValue placeholder="Choose a class..." />
               </SelectTrigger>
-              <SelectContent className="rounded-2xl shadow-xl">
+              <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7]">
                 {classesData?.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="rounded-xl">
+                  <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7]">
                     {c.name}
                   </SelectItem>
                 ))}
@@ -106,10 +130,14 @@ export default function AssignmentsPage() {
         </div>
 
         {selectedClassId ? (
-          <ClassAssignmentManager classId={selectedClassId} />
+          <div className="max-w-[1024px] mx-auto px-6 pb-24">
+            <ClassAssignmentManager classId={selectedClassId} />
+          </div>
         ) : (
-          <div className="text-center py-48 bg-secondary/20 rounded-[40px] border border-dashed animate-pulse">
-            <p className="text-xl text-muted-foreground font-medium">Select a class to begin managing assignments.</p>
+          <div className="max-w-[1024px] mx-auto px-6">
+            <div className="text-center py-48 bg-[#f5f5f7]/50 rounded-[48px] border border-dashed border-[#d2d2d7] animate-pulse">
+              <p className="text-xl text-[#86868b] font-medium">Select a class to begin managing assignments.</p>
+            </div>
           </div>
         )}
       </section>
