@@ -3,7 +3,6 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2, LayoutGrid, Upload, Loader2, Sparkles, CalendarDays, Clock } from 'lucide-react';
@@ -212,15 +211,22 @@ export default function TimetablePage() {
               
               <div className="space-y-2 pt-2">
                 {classes.map((c) => (
-                  <button
+                  <div
                     key={c.id}
                     onClick={() => setSelectedClassId(c.id)}
                     className={cn(
-                      "w-full flex items-center justify-between p-3 rounded-2xl transition-all text-left group",
+                      "w-full flex items-center justify-between p-3 rounded-2xl transition-all cursor-pointer text-left group",
                       selectedClassId === c.id 
                         ? "bg-[#0071e3] text-white shadow-md" 
                         : "bg-transparent text-[#1d1d1f] hover:bg-[#f5f5f7]"
                     )}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setSelectedClassId(c.id);
+                      }
+                    }}
                   >
                     <span className="font-medium truncate pl-1">{c.name}</span>
                     <Button
@@ -239,7 +245,7 @@ export default function TimetablePage() {
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </button>
+                  </div>
                 ))}
                 
                 {classes.length === 0 && (
