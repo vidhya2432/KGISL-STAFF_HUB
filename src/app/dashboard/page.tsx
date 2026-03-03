@@ -41,31 +41,37 @@ export default function DashboardPage() {
            <div className="aspect-[16/9] bg-gradient-to-b from-gray-50 to-white rounded-[40px] border shadow-2xl overflow-hidden relative">
               <div className="absolute inset-0 grid grid-cols-3 gap-1 p-1 opacity-80">
                 <div className="relative h-full w-full overflow-hidden rounded-tl-[39px]">
-                   <Image 
-                    src={rosterImg?.imageUrl || ''} 
-                    alt="Roster Management" 
-                    fill 
-                    className="object-cover"
-                    data-ai-hint={rosterImg?.imageHint}
-                   />
+                   {rosterImg?.imageUrl && (
+                     <Image 
+                      src={rosterImg.imageUrl} 
+                      alt="Roster Management" 
+                      fill 
+                      className="object-cover"
+                      data-ai-hint={rosterImg.imageHint}
+                     />
+                   )}
                 </div>
                 <div className="relative h-full w-full overflow-hidden">
-                   <Image 
-                    src={aiImg?.imageUrl || ''} 
-                    alt="AI Architect" 
-                    fill 
-                    className="object-cover"
-                    data-ai-hint={aiImg?.imageHint}
-                   />
+                   {aiImg?.imageUrl && (
+                     <Image 
+                      src={aiImg.imageUrl} 
+                      alt="AI Architect" 
+                      fill 
+                      className="object-cover"
+                      data-ai-hint={aiImg.imageHint}
+                     />
+                   )}
                 </div>
                 <div className="relative h-full w-full overflow-hidden rounded-tr-[39px]">
-                   <Image 
-                    src={gradingImg?.imageUrl || ''} 
-                    alt="Grading Hub" 
-                    fill 
-                    className="object-cover"
-                    data-ai-hint={gradingImg?.imageHint}
-                   />
+                   {gradingImg?.imageUrl && (
+                     <Image 
+                      src={gradingImg.imageUrl} 
+                      alt="Grading Hub" 
+                      fill 
+                      className="object-cover"
+                      data-ai-hint={gradingImg.imageHint}
+                     />
+                   )}
                 </div>
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-transparent" />
