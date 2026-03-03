@@ -5,6 +5,24 @@
       "description": "User avatar for header profile",
       "imageUrl": "https://images.unsplash.com/photo-1531123414780-f74242c2b052?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cGVyc29uJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY2OTY5NDM5fDA&ixlib=rb-4.1.0&q=80&w=1080",
       "imageHint": "person portrait"
+    },
+    {
+      "id": "hero-roster",
+      "description": "Student roster management interface preview",
+      "imageUrl": "https://images.unsplash.com/photo-1769092992555-42c231deff34?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxzdHVkZW50JTIwcmVjb3Jkc3xlbnwwfHx8fDE3NzI1MTg3NDd8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "student records"
+    },
+    {
+      "id": "hero-ai",
+      "description": "AI topic generation visualization",
+      "imageUrl": "https://images.unsplash.com/photo-1674027444485-cec3da58eef4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxhcnRpZmljaWFsJTIwaW50ZWxsaWdlbmNlfGVufDB8fHx8MTc3MjQyOTY5MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "artificial intelligence"
+    },
+    {
+      "id": "hero-grading",
+      "description": "Grading and performance analytics dashboard",
+      "imageUrl": "https://images.unsplash.com/photo-1762427354251-f008b64dbc32?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxkYXRhJTIwY2hhcnRzfGVufDB8fHx8MTc3MjQ1Mzc1Mnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "data charts"
     }
   ]
 }

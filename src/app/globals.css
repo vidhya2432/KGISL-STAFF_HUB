@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -41,7 +42,7 @@
 }
 
 .apple-nav-link {
-  @apply text-[16px] font-medium text-[#1d1d1f]/70 hover:text-[#1d1d1f] transition-colors tracking-tight;
+  @apply text-[16px] font-semibold text-[#1d1d1f]/70 hover:text-[#1d1d1f] transition-colors tracking-tight;
 }
 
 .apple-button-primary {
