@@ -3,33 +3,16 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  BookMarked,
-  Bell,
-  LayoutDashboard,
-  CalendarDays,
-  LineChart,
-  BookOpen,
-} from 'lucide-react';
+import { Search, ShoppingBag, Apple } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarInset,
-} from '@/components/ui/sidebar';
-import { Header } from '@/components/dashboard/header';
+import { FirebaseClientProvider } from '@/firebase';
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard/timetable', icon: CalendarDays, label: 'Timetable' },
-  { href: '/dashboard/assignments', icon: BookMarked, label: 'Assignments' },
-  { href: '/dashboard/performance', icon: LineChart, label: 'Performance' },
-  { href: '/dashboard/notifications', icon: Bell, label: 'Notifications' },
+  { href: '/dashboard', label: 'Overview' },
+  { href: '/dashboard/timetable', label: 'Timetable' },
+  { href: '/dashboard/assignments', label: 'Assignments' },
+  { href: '/dashboard/performance', label: 'Performance' },
+  { href: '/dashboard/notifications', label: 'Support' },
 ];
 
 export default function DashboardLayout({
@@ -40,47 +23,69 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader>
-          <div className="flex items-center gap-2 p-2">
-            <BookOpen className="h-8 w-8 text-primary" />
-            <h2 className="text-xl font-bold font-headline text-primary">
-              AcademiaLink
-            </h2>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === item.href}
-                  className={cn(
-                    'justify-start',
-                    pathname === item.href &&
-                      'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
-                  )}
-                >
-                  <Link href={item.href}>
-                    <item.icon className="mr-2 h-5 w-5" />
-                    <span>{item.label}</span>
+    <FirebaseClientProvider>
+      <div className="min-h-screen bg-[#f5f5f7]">
+        {/* Top Banner Tip */}
+        <div className="bg-[#f5f5f7] text-[12px] py-3 text-center px-4 text-[#1d1d1f]/80">
+          Get up to 6 months of No Cost EMI* plus up to ₹10000 instant cashback* on selected products. <Link href="#" className="text-[#0066cc] hover:underline ml-1">Shop ›</Link>
+        </div>
+
+        {/* Global Navigation */}
+        <nav className="sticky top-0 z-50 bg-[#f5f5f7]/80 backdrop-blur-md border-b border-transparent">
+          <div className="max-w-[1024px] mx-auto px-6 h-11 flex items-center justify-between">
+            <Link href="/dashboard" className="flex items-center hover:opacity-70 transition-opacity">
+              <Apple className="h-4 w-4 fill-current" />
+            </Link>
+            
+            <ul className="hidden md:flex items-center gap-8">
+              {navItems.map((item) => (
+                <li key={item.href}>
+                  <Link 
+                    href={item.href}
+                    className={cn(
+                      "apple-nav-link",
+                      pathname === item.href && "text-[#1d1d1f] font-medium"
+                    )}
+                  >
+                    {item.label}
                   </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarContent>
-      </Sidebar>
-      <SidebarInset>
-        <Header />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
-          <div className="mx-auto max-w-7xl">
-            {children}
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex items-center gap-6 text-[#1d1d1f]/80">
+              <button className="hover:text-[#1d1d1f] transition-colors">
+                <Search className="h-4 w-4" />
+              </button>
+              <button className="hover:text-[#1d1d1f] transition-colors">
+                <ShoppingBag className="h-4 w-4" />
+              </button>
+            </div>
           </div>
+        </nav>
+
+        <main className="animate-in fade-in duration-1000">
+          {children}
         </main>
-      </SidebarInset>
-    </SidebarProvider>
+
+        <footer className="bg-[#f5f5f7] border-t py-12 mt-24">
+          <div className="max-w-[1024px] mx-auto px-6">
+            <div className="text-[12px] text-[#86868b] leading-relaxed space-y-4">
+              <p>1. Performance analytics and AI insights are based on internal data processing models. Accuracy may vary by dataset complexity.</p>
+              <p>2. Subscription to AcademiaLink Plus may be required for some advanced generative features.</p>
+              <div className="border-b border-[#d2d2d7] my-4" />
+              <div className="flex justify-between items-center">
+                <p>© 2024 AcademiaLink Inc. All rights reserved.</p>
+                <div className="flex gap-4">
+                  <Link href="#" className="hover:underline">Privacy Policy</Link>
+                  <Link href="#" className="hover:underline">Terms of Use</Link>
+                  <Link href="#" className="hover:underline">Sales Policy</Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </FirebaseClientProvider>
   );
 }

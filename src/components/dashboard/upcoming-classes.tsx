@@ -1,39 +1,40 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { timetable } from '@/lib/data';
+'use client';
+
+import { useFirestore, useCollection } from '@/firebase';
+import { collection, query, limit } from 'firebase/firestore';
+import { useMemo } from 'react';
 
 export function UpcomingClasses() {
-  const today = new Date().toLocaleString('en-us', { weekday: 'long' });
-  const upcoming = timetable.slice(0, 5); // Show next 5 for simplicity
+  const db = useFirestore();
+  const timetableQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'timetable'), limit(5));
+  }, [db]);
+
+  const { data: schedule, loading } = useCollection(timetableQuery);
+
+  if (loading) return <div className="text-center py-12 animate-pulse text-muted-foreground">Loading schedule...</div>;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upcoming Classes</CardTitle>
-        <CardDescription>Your next scheduled classes for the week.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Day</TableHead>
-              <TableHead>Time</TableHead>
-              <TableHead>Course</TableHead>
-              <TableHead>Location</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {upcoming.map((item) => (
-              <TableRow key={item.id} className={item.day === today ? 'bg-secondary' : ''}>
-                <TableCell className="font-medium">{item.day}</TableCell>
-                <TableCell>{item.time}</TableCell>
-                <TableCell>{item.course}</TableCell>
-                <TableCell>{item.location}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <div className="grid gap-6">
+      {schedule && schedule.length > 0 ? (
+        schedule.map((item) => (
+          <div key={item.id} className="group flex items-center justify-between p-8 rounded-3xl bg-secondary/30 hover:bg-secondary/50 transition-colors border border-transparent hover:border-border">
+            <div className="space-y-1">
+              <p className="text-sm font-bold tracking-tight uppercase text-muted-foreground">{item.day} • {item.time}</p>
+              <h3 className="text-2xl font-bold tracking-tight">{item.course}</h3>
+              <p className="text-muted-foreground font-medium">{item.location}</p>
+            </div>
+            <button className="bg-primary text-primary-foreground h-10 w-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-xl">›</span>
+            </button>
+          </div>
+        ))
+      ) : (
+        <div className="text-center py-24 rounded-3xl bg-secondary/20 border border-dashed">
+          <p className="text-muted-foreground font-medium">No upcoming classes scheduled.</p>
+        </div>
+      )}
+    </div>
   );
 }

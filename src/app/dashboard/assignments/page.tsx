@@ -1,13 +1,13 @@
-
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useFirestore, useCollection } from '@/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, BookOpen, GraduationCap } from 'lucide-react';
+import { Plus, GraduationCap } from 'lucide-react';
 import { ClassAssignmentManager } from '@/components/dashboard/class-assignment-manager';
 import { 
   Dialog,
@@ -18,98 +18,101 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { toast } from '@/hooks/use-toast';
 
 export default function AssignmentsPage() {
-  const [classes, setClasses] = useState([
-    { id: 'c1', name: 'Advanced Algorithms (A)' },
-    { id: 'c2', name: 'Modern Compilers (B)' },
-  ]);
+  const db = useFirestore();
+  const { data: classesData, loading } = useCollection(db ? collection(db, 'classes') : null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [newClassName, setNewClassName] = useState('');
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
 
   const handleAddClass = () => {
-    if (!newClassName.trim()) return;
-    const newClass = {
-      id: Math.random().toString(36).substr(2, 9),
+    if (!newClassName.trim() || !db) return;
+    
+    addDoc(collection(db, 'classes'), {
       name: newClassName,
-    };
-    setClasses([...classes, newClass]);
-    setNewClassName('');
-    setIsAddClassOpen(false);
+      facultyId: 'demo-user', // Hardcoded for demo/MVP
+      createdAt: serverTimestamp(),
+    }).then(() => {
+      setNewClassName('');
+      setIsAddClassOpen(false);
+      toast({ title: 'Class created', description: `${newClassName} has been added successfully.` });
+    });
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold font-headline">Academic Assignments</h1>
-          <p className="text-muted-foreground">Manage class syllabi, AI-generated assignments, and student submissions.</p>
-        </div>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-24">
+      <section className="text-center space-y-6">
+        <h1 className="text-5xl font-bold tracking-tight">Assignment Management</h1>
+        <p className="text-xl text-muted-foreground font-medium max-w-xl mx-auto">
+          Distribute unique topics, automate roster management, and analyze student performance.
+        </p>
         
-        <Dialog open={isAddClassOpen} onOpenChange={setIsAddClassOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Add New Class
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Class</DialogTitle>
-              <DialogDescription>
-                Create a new class group to manage assignments and students.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="new-class-name">Class Name</Label>
-                <Input
-                  id="new-class-name"
-                  placeholder="e.g. CS-301 (Data Structures)"
-                  value={newClassName}
-                  onChange={(e) => setNewClassName(e.target.value)}
-                />
+        <div className="pt-4 flex items-center justify-center gap-4">
+          <Dialog open={isAddClassOpen} onOpenChange={setIsAddClassOpen}>
+            <DialogTrigger asChild>
+              <button className="bg-primary text-primary-foreground px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity inline-flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Add New Class
+              </button>
+            </DialogTrigger>
+            <DialogContent className="rounded-3xl">
+              <DialogHeader>
+                <DialogTitle>Add New Class</DialogTitle>
+                <DialogDescription>
+                  Create a new class group to manage specific student cohorts.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-6">
+                <div className="space-y-2">
+                  <Label htmlFor="new-class-name">Class Name</Label>
+                  <Input
+                    id="new-class-name"
+                    placeholder="e.g. Advanced Algorithms (Section A)"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddClassOpen(false)}>Cancel</Button>
-              <Button onClick={handleAddClass} disabled={!newClassName.trim()}>
-                Create Class
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsAddClassOpen(false)} className="rounded-full">Cancel</Button>
+                <Button onClick={handleAddClass} disabled={!newClassName.trim()} className="rounded-full px-8">Create</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </section>
 
-      <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-lg border">
-        <GraduationCap className="h-5 w-5 text-primary" />
-        <span className="font-medium">Select Class:</span>
-        <Select value={selectedClassId || ''} onValueChange={setSelectedClassId}>
-          <SelectTrigger className="w-[300px]">
-            <SelectValue placeholder="Choose a class to manage..." />
-          </SelectTrigger>
-          <SelectContent>
-            {classes.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <section className="space-y-12">
+        <div className="flex flex-col items-center gap-6">
+          <div className="inline-flex items-center gap-4 bg-secondary/50 px-6 py-3 rounded-full border">
+            <GraduationCap className="h-5 w-5 text-primary" />
+            <span className="text-sm font-bold tracking-tight uppercase">Select Class:</span>
+            <Select value={selectedClassId || ''} onValueChange={setSelectedClassId}>
+              <SelectTrigger className="w-[240px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold">
+                <SelectValue placeholder="Choose a class..." />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl shadow-xl">
+                {classesData?.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="rounded-xl">
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-      {selectedClassId ? (
-        <ClassAssignmentManager classId={selectedClassId} />
-      ) : (
-        <Card className="flex flex-col items-center justify-center p-12 border-dashed">
-          <BookOpen className="h-16 w-16 text-muted-foreground opacity-20 mb-4" />
-          <h3 className="text-xl font-semibold">No Class Selected</h3>
-          <p className="text-muted-foreground max-w-sm text-center mt-2">
-            Please select a class from the dropdown above to manage its syllabus, assignments, and student grades.
-          </p>
-        </Card>
-      )}
+        {selectedClassId ? (
+          <ClassAssignmentManager classId={selectedClassId} />
+        ) : (
+          <div className="text-center py-48 bg-secondary/20 rounded-[40px] border border-dashed animate-pulse">
+            <p className="text-xl text-muted-foreground font-medium">Select a class to begin managing assignments.</p>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

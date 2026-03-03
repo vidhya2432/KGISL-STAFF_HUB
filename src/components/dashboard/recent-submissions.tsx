@@ -1,63 +1,47 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+'use client';
+
+import { useFirestore, useCollection } from '@/firebase';
+import { collection, query, limit } from 'firebase/firestore';
+import { useMemo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { submissions, students, assignments } from '@/lib/data';
-import { format, parseISO } from 'date-fns';
 
 export function RecentSubmissions() {
-  const recentSubmissions = submissions
-    .filter(s => s.submittedAt)
-    .sort((a, b) => new Date(b.submittedAt!).getTime() - new Date(a.submittedAt!).getTime())
-    .slice(0, 5);
+  const db = useFirestore();
+  const submissionsQuery = useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'submissions'), limit(5));
+  }, [db]);
 
-  const getStudent = (studentId: string) => students.find(s => s.id === studentId);
-  const getAssignment = (assignmentId: string) => assignments.find(a => a.id === assignmentId);
+  const { data: submissions, loading } = useCollection(submissionsQuery);
+
+  if (loading) return <div className="text-center py-12 animate-pulse text-muted-foreground">Loading submissions...</div>;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent Submissions</CardTitle>
-        <CardDescription>The latest assignment submissions from your students.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Student</TableHead>
-              <TableHead>Assignment</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Submitted On</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {recentSubmissions.map((sub) => {
-              const student = getStudent(sub.studentId);
-              const assignment = getAssignment(sub.assignmentId);
-              if (!student || !assignment) return null;
-
-              return (
-                <TableRow key={sub.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={student.avatarUrl} alt={student.name} />
-                        <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{student.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{assignment.title}</TableCell>
-                  <TableCell>
-                    <Badge variant={sub.status === 'Late' ? 'destructive' : 'secondary'}>{sub.status}</Badge>
-                  </TableCell>
-                  <TableCell>{format(parseISO(sub.submittedAt!), 'PPp')}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <div className="grid gap-4">
+      {submissions && submissions.length > 0 ? (
+        submissions.map((sub) => (
+          <div key={sub.id} className="flex items-center justify-between p-6 rounded-2xl bg-white border border-border shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-12 w-12 border">
+                <AvatarImage src={sub.avatarUrl} alt={sub.studentName} />
+                <AvatarFallback>{sub.studentName?.charAt(0) || 'S'}</AvatarFallback>
+              </Avatar>
+              <div className="space-y-0.5">
+                <p className="text-sm text-muted-foreground font-medium">{sub.courseCode || 'Assignment'}</p>
+                <h4 className="font-bold tracking-tight">{sub.studentName}</h4>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-primary">{sub.status}</p>
+              <p className="text-[12px] text-muted-foreground">{sub.submittedAt}</p>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="text-center py-24 rounded-2xl bg-secondary/10 border border-dashed">
+          <p className="text-muted-foreground font-medium">No recent submissions found.</p>
+        </div>
+      )}
+    </div>
   );
 }
