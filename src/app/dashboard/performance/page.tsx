@@ -37,7 +37,7 @@ export default function PerformancePage() {
                 <SelectItem 
                   key={c.id} 
                   value={c.id} 
-                  className="rounded-xl focus:bg-[#f5f5f7] focus:text-black text-black font-semibold py-3 cursor-pointer"
+                  className="rounded-xl focus:bg-[#f5f5f7] focus:text-[#1d1d1f] text-[#1d1d1f] font-semibold py-3 cursor-pointer"
                 >
                   {c.name}
                 </SelectItem>

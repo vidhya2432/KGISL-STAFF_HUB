@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, GraduationCap, Loader2 } from 'lucide-react';
+import { Plus, GraduationCap } from 'lucide-react';
 import { ClassAssignmentManager } from '@/components/dashboard/class-assignment-manager';
 import { 
   Dialog,
@@ -22,43 +22,39 @@ import { toast } from '@/hooks/use-toast';
 
 export default function AssignmentsPage() {
   const db = useFirestore();
-  const { data: classesData, loading } = useCollection(db ? collection(db, 'classes') : null);
+  const { data: classesData } = useCollection(db ? collection(db, 'classes') : null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [newClassName, setNewClassName] = useState('');
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
 
-  const handleAddClass = async () => {
+  const handleAddClass = () => {
     if (!newClassName.trim() || !db) return;
     
-    setIsCreating(true);
     const className = newClassName.trim();
+    const classRef = doc(collection(db, 'classes'));
     
-    try {
-      const docRef = await addDoc(collection(db, 'classes'), {
-        name: className,
-        facultyId: 'demo-user',
-        createdAt: serverTimestamp(),
-      });
-      
-      // Clear inputs and close dialog immediately
-      setNewClassName('');
-      setIsAddClassOpen(false);
-      setSelectedClassId(docRef.id);
-      
-      toast({ 
-        title: 'Class created', 
-        description: `${className} has been added and selected.` 
-      });
-    } catch (error) {
+    // FIRE AND FORGET - NO AWAIT (Optimistic Update)
+    setDoc(classRef, {
+      name: className,
+      facultyId: 'demo-user',
+      createdAt: serverTimestamp(),
+    }).catch((error) => {
       toast({ 
         variant: 'destructive', 
-        title: 'Error', 
-        description: 'Failed to create class. Please try again.' 
+        title: 'Sync Error', 
+        description: 'Class creation failed in the background.' 
       });
-    } finally {
-      setIsCreating(false);
-    }
+    });
+    
+    // UI updates immediately for a snappy feel
+    setNewClassName('');
+    setIsAddClassOpen(false);
+    setSelectedClassId(classRef.id);
+    
+    toast({ 
+      title: 'Class created', 
+      description: `${className} has been added and selected.` 
+    });
   };
 
   return (
@@ -100,11 +96,10 @@ export default function AssignmentsPage() {
                 <Button variant="ghost" onClick={() => setIsAddClassOpen(false)} className="rounded-full px-6">Cancel</Button>
                 <button 
                   onClick={handleAddClass} 
-                  disabled={!newClassName.trim() || isCreating} 
-                  className="apple-button-primary px-10 disabled:opacity-50 flex items-center gap-2"
+                  disabled={!newClassName.trim()} 
+                  className="apple-button-primary px-10 disabled:opacity-50"
                 >
-                  {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {isCreating ? 'Creating...' : 'Create'}
+                  Create
                 </button>
               </DialogFooter>
             </DialogContent>
@@ -126,7 +121,7 @@ export default function AssignmentsPage() {
                   <SelectItem 
                     key={c.id} 
                     value={c.id} 
-                    className="rounded-xl focus:bg-[#f5f5f7] focus:text-black text-black font-bold py-3 cursor-pointer"
+                    className="rounded-xl focus:bg-[#f5f5f7] focus:text-[#1d1d1f] text-[#1d1d1f] font-bold py-3 cursor-pointer"
                   >
                     {c.name}
                   </SelectItem>
