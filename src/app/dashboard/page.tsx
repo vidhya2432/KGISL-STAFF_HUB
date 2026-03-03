@@ -1,11 +1,17 @@
+
 'use client';
 
 import { OverviewStats } from '@/components/dashboard/overview-stats';
 import { UpcomingClasses } from '@/components/dashboard/upcoming-classes';
 import { RecentSubmissions } from '@/components/dashboard/recent-submissions';
 import Image from 'next/image';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export default function DashboardPage() {
+  const rosterImg = PlaceHolderImages.find(img => img.id === 'hero-roster');
+  const aiImg = PlaceHolderImages.find(img => img.id === 'hero-ai');
+  const gradingImg = PlaceHolderImages.find(img => img.id === 'hero-grading');
+
   return (
     <div className="flex flex-col bg-white">
       {/* Hero Section */}
@@ -32,20 +38,50 @@ export default function DashboardPage() {
 
         {/* Product Image Placeholder */}
         <div className="mt-16 max-w-[1000px] mx-auto px-6">
-           <div className="aspect-[16/9] bg-gradient-to-b from-gray-50 to-white rounded-[40px] border shadow-2xl overflow-hidden">
-              <div className="p-8 h-full flex flex-col justify-end">
+           <div className="aspect-[16/9] bg-gradient-to-b from-gray-50 to-white rounded-[40px] border shadow-2xl overflow-hidden relative">
+              <div className="absolute inset-0 grid grid-cols-3 gap-1 p-1 opacity-80">
+                <div className="relative h-full w-full overflow-hidden rounded-tl-[39px]">
+                   <Image 
+                    src={rosterImg?.imageUrl || ''} 
+                    alt="Roster Management" 
+                    fill 
+                    className="object-cover"
+                    data-ai-hint={rosterImg?.imageHint}
+                   />
+                </div>
+                <div className="relative h-full w-full overflow-hidden">
+                   <Image 
+                    src={aiImg?.imageUrl || ''} 
+                    alt="AI Architect" 
+                    fill 
+                    className="object-cover"
+                    data-ai-hint={aiImg?.imageHint}
+                   />
+                </div>
+                <div className="relative h-full w-full overflow-hidden rounded-tr-[39px]">
+                   <Image 
+                    src={gradingImg?.imageUrl || ''} 
+                    alt="Grading Hub" 
+                    fill 
+                    className="object-cover"
+                    data-ai-hint={gradingImg?.imageHint}
+                   />
+                </div>
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-white via-white/40 to-transparent" />
+              <div className="relative p-8 h-full flex flex-col justify-end">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
                      <div className="space-y-2">
                         <p className="text-[#86868b] text-sm uppercase tracking-wider font-bold">Roster Management</p>
-                        <h3 className="text-xl font-semibold">Import with precision.</h3>
+                        <h3 className="text-xl font-semibold text-[#1d1d1f]">Import with precision.</h3>
                      </div>
                      <div className="space-y-2">
                         <p className="text-[#86868b] text-sm uppercase tracking-wider font-bold">AI Architect</p>
-                        <h3 className="text-xl font-semibold">Unique topics for all.</h3>
+                        <h3 className="text-xl font-semibold text-[#1d1d1f]">Unique topics for all.</h3>
                      </div>
                      <div className="space-y-2">
                         <p className="text-[#86868b] text-sm uppercase tracking-wider font-bold">Grading Hub</p>
-                        <h3 className="text-xl font-semibold">Analyze in seconds.</h3>
+                        <h3 className="text-xl font-semibold text-[#1d1d1f]">Analyze in seconds.</h3>
                      </div>
                   </div>
               </div>
