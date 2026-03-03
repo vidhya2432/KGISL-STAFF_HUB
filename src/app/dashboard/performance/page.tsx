@@ -29,10 +29,10 @@ export default function PerformancePage() {
           <GraduationCap className="h-5 w-5 text-[#0071e3]" />
           <span className="text-sm font-bold tracking-tight uppercase text-[#1d1d1f]">Select Class:</span>
           <Select value={selectedClassId || ''} onValueChange={setSelectedClassId}>
-            <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#0071e3]">
+            <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#1d1d1f]">
               <SelectValue placeholder="Choose a class group..." />
             </SelectTrigger>
-            <SelectContent className="rounded-3xl shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
+            <SelectContent className="rounded-3xl shadow-2xl border-[#d2d2d7] bg-white">
               {classes.map((c) => (
                 <SelectItem 
                   key={c.id} 

@@ -41,16 +41,16 @@ export default function AssignmentsPage() {
         createdAt: serverTimestamp(),
       });
       
+      // Clear inputs and close dialog immediately
       setNewClassName('');
-      setSelectedClassId(docRef.id);
       setIsAddClassOpen(false);
+      setSelectedClassId(docRef.id);
       
       toast({ 
         title: 'Class created', 
         description: `${className} has been added and selected.` 
       });
     } catch (error) {
-      console.error("Error adding class: ", error);
       toast({ 
         variant: 'destructive', 
         title: 'Error', 
@@ -103,8 +103,8 @@ export default function AssignmentsPage() {
                   disabled={!newClassName.trim() || isCreating} 
                   className="apple-button-primary px-10 disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Create
+                  {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isCreating ? 'Creating...' : 'Create'}
                 </button>
               </DialogFooter>
             </DialogContent>
@@ -119,9 +119,9 @@ export default function AssignmentsPage() {
             <span className="text-sm font-bold tracking-tight uppercase text-[#1d1d1f]">Select Class:</span>
             <Select value={selectedClassId || ''} onValueChange={setSelectedClassId}>
               <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#1d1d1f]">
-                <SelectValue placeholder="Choose a class..." className="text-[#1d1d1f]" />
+                <SelectValue placeholder="Choose a class..." />
               </SelectTrigger>
-              <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
+              <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7] bg-white">
                 {classesData?.map((c: any) => (
                   <SelectItem 
                     key={c.id} 
