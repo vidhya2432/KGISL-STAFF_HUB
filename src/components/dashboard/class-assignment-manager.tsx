@@ -52,6 +52,7 @@ import {
 import { suggestAssignmentsAction, syncFromDriveAction, extractRosterAction } from '@/app/dashboard/assignments/actions';
 import { toast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
+import { cn } from '@/lib/utils';
 
 // pdfjs initialization
 import * as pdfjsLib from 'pdfjs-dist';
@@ -237,6 +238,34 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
       title: 'Assignment Saved', 
       description: `Topic distribution is now active for ${mappings.length} entries.` 
     });
+  };
+
+  const handleSyncDrive = async () => {
+    if (!driveLink || !activeAssignmentId || !db) return;
+    
+    setIsSyncing(true);
+    try {
+      const response = await syncFromDriveAction(
+        classId, 
+        activeAssignmentId, 
+        driveLink, 
+        roster.map(s => ({ id: s.id, name: s.name, roll: s.roll }))
+      );
+
+      if (response.success && response.data) {
+        setSubmissionsMap(prev => ({
+          ...prev,
+          [activeAssignmentId]: response.data as StudentSubmission[]
+        }));
+        setIsDriveDialogOpen(false);
+        setDriveLink('');
+        toast({ title: 'Sync Complete', description: `Processed submissions for ${response.data.length} students.` });
+      }
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Sync Failed', description: 'Could not connect to Google Drive.' });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const downloadAssignmentSheet = (assignment: Assignment) => {
