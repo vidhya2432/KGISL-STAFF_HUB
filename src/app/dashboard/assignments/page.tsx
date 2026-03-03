@@ -44,6 +44,7 @@ export default function AssignmentsPage() {
       setNewClassName('');
       setSelectedClassId(docRef.id);
       setIsAddClassOpen(false);
+      
       toast({ 
         title: 'Class created', 
         description: `${className} has been added and selected.` 
@@ -117,15 +118,15 @@ export default function AssignmentsPage() {
             <GraduationCap className="h-5 w-5 text-[#0071e3]" />
             <span className="text-sm font-bold tracking-tight uppercase text-[#1d1d1f]">Select Class:</span>
             <Select value={selectedClassId || ''} onValueChange={setSelectedClassId}>
-              <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#0071e3]">
-                <SelectValue placeholder="Choose a class..." />
+              <SelectTrigger className="w-[280px] border-none bg-transparent shadow-none focus:ring-0 text-sm font-bold text-[#1d1d1f]">
+                <SelectValue placeholder="Choose a class..." className="text-[#1d1d1f]" />
               </SelectTrigger>
               <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
                 {classesData?.map((c: any) => (
                   <SelectItem 
                     key={c.id} 
                     value={c.id} 
-                    className="rounded-xl focus:bg-[#f5f5f7] focus:text-black text-black font-semibold py-3 cursor-pointer"
+                    className="rounded-xl focus:bg-[#f5f5f7] focus:text-black text-black font-bold py-3 cursor-pointer"
                   >
                     {c.name}
                   </SelectItem>
