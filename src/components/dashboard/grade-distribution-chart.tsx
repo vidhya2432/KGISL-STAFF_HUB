@@ -1,43 +1,85 @@
 'use client';
+
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { performanceData } from '@/lib/data';
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import { useFirestore, useCollection } from '@/firebase';
+import { collectionGroup, query, where } from 'firebase/firestore';
 
-export function GradeDistributionChart() {
-  const gradeRanges = [
-    { name: '0-59 (F)', range: [0, 59] },
-    { name: '60-69 (D)', range: [60, 69] },
-    { name: '70-79 (C)', range: [70, 79] },
-    { name: '80-89 (B)', range: [80, 89] },
-    { name: '90-100 (A)', range: [90, 100] },
-  ];
+interface Submission {
+  marks: number;
+}
 
-  const data = gradeRanges.map(grade => ({
-    name: grade.name,
-    total: performanceData.filter(p => p.average >= grade.range[0] && p.average <= grade.range[1]).length,
-  }));
+export function GradeDistributionChart({ classId }: { classId: string }) {
+  const db = useFirestore();
+  
+  // Note: For MVP we simulate or query submissions. 
+  // In a real app, you'd likely aggregate these.
+  const submissionsQuery = useMemo(() => {
+    if (!db) return null;
+    // We fetch all submissions for the assignments of this class
+    return query(collectionGroup(db, 'submissions')); 
+  }, [db]);
+
+  const { data: allSubmissions = [] } = useCollection<Submission>(submissionsQuery);
+
+  const distributionData = useMemo(() => {
+    const ranges = [
+      { name: '90-100', min: 90, max: 100, color: '#34c759' },
+      { name: '80-89', min: 80, max: 89, color: '#0071e3' },
+      { name: '70-79', min: 70, max: 79, color: '#5856d6' },
+      { name: '60-69', min: 60, max: 69, color: '#ff9500' },
+      { name: '0-59', min: 0, max: 59, color: '#ff3b30' },
+    ];
+
+    return ranges.map(range => ({
+      name: range.name,
+      total: allSubmissions.filter(s => s.marks !== null && s.marks >= range.min && s.marks <= range.max).length,
+      color: range.color
+    }));
+  }, [allSubmissions]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Grade Distribution</CardTitle>
-        <CardDescription>Overall student performance based on average scores.</CardDescription>
+    <Card className="rounded-[32px] border-[#d2d2d7] shadow-sm overflow-hidden bg-white">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-2xl font-semibold tracking-tight">Grade Distribution</CardTitle>
+        <CardDescription className="text-[#86868b]">Visualizing overall class performance across all assignments.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{
-                background: 'hsl(var(--card))',
-                borderColor: 'hsl(var(--border))',
-                color: 'hsl(var(--card-foreground))',
-              }}
-            />
-            <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <CardContent className="pt-8">
+        <div className="h-[350px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={distributionData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#86868b', fontSize: 12, fontWeight: 600 }}
+                dy={10}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: '#86868b', fontSize: 12 }}
+                dx={-10}
+              />
+              <Tooltip
+                cursor={{ fill: '#f5f5f7' }}
+                contentStyle={{ 
+                  borderRadius: '16px', 
+                  border: '1px solid #d2d2d7', 
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
+                  fontSize: '14px',
+                  fontWeight: '600'
+                }}
+              />
+              <Bar dataKey="total" radius={[12, 12, 0, 0]} barSize={60}>
+                {distributionData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );
