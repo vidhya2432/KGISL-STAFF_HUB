@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, GraduationCap } from 'lucide-react';
+import { Plus, GraduationCap, Loader2 } from 'lucide-react';
 import { ClassAssignmentManager } from '@/components/dashboard/class-assignment-manager';
 import { 
   Dialog,
@@ -26,34 +26,38 @@ export default function AssignmentsPage() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [newClassName, setNewClassName] = useState('');
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleAddClass = () => {
+  const handleAddClass = async () => {
     if (!newClassName.trim() || !db) return;
     
+    setIsCreating(true);
     const className = newClassName.trim();
     
-    addDoc(collection(db, 'classes'), {
-      name: className,
-      facultyId: 'demo-user',
-      createdAt: serverTimestamp(),
-    })
-    .then((docRef) => {
-      setIsAddClassOpen(false);
+    try {
+      const docRef = await addDoc(collection(db, 'classes'), {
+        name: className,
+        facultyId: 'demo-user',
+        createdAt: serverTimestamp(),
+      });
+      
       setNewClassName('');
       setSelectedClassId(docRef.id);
+      setIsAddClassOpen(false);
       toast({ 
         title: 'Class created', 
         description: `${className} has been added and selected.` 
       });
-    })
-    .catch((error) => {
+    } catch (error) {
       console.error("Error adding class: ", error);
       toast({ 
         variant: 'destructive', 
         title: 'Error', 
         description: 'Failed to create class. Please try again.' 
       });
-    });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -72,9 +76,9 @@ export default function AssignmentsPage() {
                 Add New Class
               </button>
             </DialogTrigger>
-            <DialogContent className="rounded-[32px] p-8 border-[#d2d2d7]">
+            <DialogContent className="rounded-[32px] p-8 border-[#d2d2d7] bg-white shadow-2xl">
               <DialogHeader>
-                <DialogTitle className="text-2xl font-bold">Add New Class</DialogTitle>
+                <DialogTitle className="text-2xl font-bold text-[#1d1d1f]">Add New Class</DialogTitle>
                 <DialogDescription className="text-base text-[#86868b]">
                   Create a new class group to manage specific student cohorts.
                 </DialogDescription>
@@ -87,7 +91,7 @@ export default function AssignmentsPage() {
                     placeholder="e.g. Advanced Algorithms (Section A)"
                     value={newClassName}
                     onChange={(e) => setNewClassName(e.target.value)}
-                    className="rounded-2xl h-12 bg-[#f5f5f7] border-none px-5 focus-visible:ring-1 focus-visible:ring-[#0071e3]"
+                    className="rounded-2xl h-12 bg-[#f5f5f7] border-none px-5 text-[#1d1d1f] focus-visible:ring-1 focus-visible:ring-[#0071e3]"
                   />
                 </div>
               </div>
@@ -95,9 +99,10 @@ export default function AssignmentsPage() {
                 <Button variant="ghost" onClick={() => setIsAddClassOpen(false)} className="rounded-full px-6">Cancel</Button>
                 <button 
                   onClick={handleAddClass} 
-                  disabled={!newClassName.trim()} 
-                  className="apple-button-primary px-10 disabled:opacity-50"
+                  disabled={!newClassName.trim() || isCreating} 
+                  className="apple-button-primary px-10 disabled:opacity-50 flex items-center gap-2"
                 >
+                  {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
                   Create
                 </button>
               </DialogFooter>
@@ -116,8 +121,12 @@ export default function AssignmentsPage() {
                 <SelectValue placeholder="Choose a class..." />
               </SelectTrigger>
               <SelectContent className="rounded-[24px] shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
-                {classesData?.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7] focus:text-[#1d1d1f] text-[#1d1d1f] font-medium py-3">
+                {classesData?.map((c: any) => (
+                  <SelectItem 
+                    key={c.id} 
+                    value={c.id} 
+                    className="rounded-xl focus:bg-[#f5f5f7] focus:text-black text-black font-semibold py-3 cursor-pointer"
+                  >
                     {c.name}
                   </SelectItem>
                 ))}

@@ -34,7 +34,11 @@ export default function PerformancePage() {
             </SelectTrigger>
             <SelectContent className="rounded-3xl shadow-2xl border-[#d2d2d7] bg-white text-[#1d1d1f]">
               {classes.map((c) => (
-                <SelectItem key={c.id} value={c.id} className="rounded-xl focus:bg-[#f5f5f7] focus:text-[#1d1d1f] text-[#1d1d1f] font-medium py-3">
+                <SelectItem 
+                  key={c.id} 
+                  value={c.id} 
+                  className="rounded-xl focus:bg-[#f5f5f7] focus:text-black text-black font-semibold py-3 cursor-pointer"
+                >
                   {c.name}
                 </SelectItem>
               ))}
