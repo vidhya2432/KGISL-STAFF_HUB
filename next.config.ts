@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  turbopack: {
+    resolveAlias: {
+      'firebase/firestore': {
+        browser: './node_modules/firebase/firestore/dist/esm/index.esm.js',
+        node: './node_modules/firebase/firestore/dist/index.cjs.js',
+      },
+    },
+  },
   images: {
     remotePatterns: [
       {

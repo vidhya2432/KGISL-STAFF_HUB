@@ -96,52 +96,21 @@ export async function extractRosterAction(content: string, isImage: boolean) {
 }
 
 export async function syncFromDriveAction(classId: string, assignmentId: string, driveLink: string, studentRoster: { id: string, name: string, roll: string }[]) {
-  // Simulate connecting to the provided link
-  await new Promise((resolve) => setTimeout(resolve, 2500));
+  // In production, this would use the Google Drive API to fetch files from the provided link.
+  // For now we return the roster with 'Pending' status — grades are entered manually or via AI analysis.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
-  const syncResults = studentRoster.map((student) => {
-    const hasSubmitted = Math.random() > 0.15;
-    
-    if (!hasSubmitted) {
-      return {
-        studentId: student.id,
-        studentName: student.name,
-        rollNumber: student.roll,
-        status: 'Pending',
-        submittedAt: null,
-        marks: null,
-        plagiarismScore: null,
-        fileName: null,
-        aiFeedback: null,
-      };
-    }
-
-    const isLate = Math.random() > 0.8;
-    const marks = Math.floor(Math.random() * 35) + 65;
-    const plagiarismScore = Math.random() * 0.18;
-    const fileName = `${student.roll}_Assignment_Submission.pdf`;
-    
-    const feedbacks = [
-      "Well-structured response with clear arguments.",
-      "Demonstrates a solid understanding of the core concepts.",
-      "Good use of references and data supporting the conclusions.",
-      "Clear explanation of the methodology used.",
-      "Creative approach to the problem solving section."
-    ];
-    const aiFeedback = feedbacks[Math.floor(Math.random() * feedbacks.length)];
-
-    return {
-      studentId: student.id,
-      studentName: student.name,
-      rollNumber: student.roll,
-      status: isLate ? 'Late' : 'Submitted',
-      submittedAt: new Date(Date.now() - Math.random() * 172800000).toISOString(),
-      marks,
-      plagiarismScore,
-      fileName,
-      aiFeedback,
-    };
-  });
+  const syncResults = studentRoster.map((student) => ({
+    studentId: student.id,
+    studentName: student.name,
+    rollNumber: student.roll,
+    status: 'Pending' as const,
+    submittedAt: null,
+    marks: null,
+    plagiarismScore: null,
+    fileName: null,
+    aiFeedback: null,
+  }));
 
   return {
     success: true,

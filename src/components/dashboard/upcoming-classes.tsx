@@ -1,14 +1,14 @@
 'use client';
 
 import { useFirestore, useCollection } from '@/firebase';
-import { collection, query, limit } from 'firebase/firestore';
+import { collectionGroup, query, limit } from 'firebase/firestore';
 import { useMemo } from 'react';
 
 export function UpcomingClasses() {
   const db = useFirestore();
   const timetableQuery = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, 'timetable'), limit(5));
+    return query(collectionGroup(db, 'schedule'), limit(5));
   }, [db]);
 
   const { data: schedule, loading } = useCollection(timetableQuery);

@@ -5,9 +5,13 @@ import { OverviewStats } from '@/components/dashboard/overview-stats';
 import { UpcomingClasses } from '@/components/dashboard/upcoming-classes';
 import { RecentSubmissions } from '@/components/dashboard/recent-submissions';
 import Image from 'next/image';
+import Link from 'next/link';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useStaffAuth } from '@/lib/auth-context';
+import { CalendarDays, ClipboardList, MessageSquare } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { user } = useStaffAuth();
   const rosterImg = PlaceHolderImages.find(img => img.id === 'hero-roster');
   const aiImg = PlaceHolderImages.find(img => img.id === 'hero-ai');
   const gradingImg = PlaceHolderImages.find(img => img.id === 'hero-grading');
@@ -15,24 +19,33 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col bg-white">
       {/* Hero Section */}
-      <section className="relative pt-20 pb-12 text-center overflow-hidden">
-        <div className="max-w-[800px] mx-auto px-6 space-y-4">
-          <h1 className="text-[48px] md:text-[56px] font-semibold tracking-tight text-[#1d1d1f] leading-tight">
-            Academic Performance.
-            <br />
-            Feature stacked. Value packed.
-          </h1>
-          <p className="text-[21px] md:text-[24px] text-[#86868b] font-normal leading-relaxed">
-            Manage student rosters, automate schedules, and generate
-            <br className="hidden md:block" /> unique assignments with AI.
+      <section className="relative pt-12 sm:pt-20 pb-12 text-center overflow-hidden">
+        <div className="max-w-[800px] mx-auto px-4 sm:px-6 space-y-4">
+          <p className="text-[#0071e3] text-[15px] font-medium">
+            Welcome back, {user?.name ?? 'Staff'}
           </p>
-          <div className="pt-8 flex items-center justify-center gap-4">
-            <button className="apple-button-primary shadow-sm">
-              Get started
-            </button>
-            <button className="text-[#0066cc] hover:underline text-[21px] flex items-center group">
-              View pricing <span className="ml-1 group-hover:translate-x-1 transition-transform">›</span>
-            </button>
+          <h1 className="text-[32px] sm:text-[48px] md:text-[56px] font-semibold tracking-tight text-[#1d1d1f] leading-tight">
+            {user?.department ?? 'Your'} Department
+            <br />
+            <span className="text-[#86868b]">Dashboard</span>
+          </h1>
+          <p className="text-[17px] sm:text-[21px] text-[#86868b] font-normal leading-relaxed">
+            Manage timetables, track assignments, and collaborate
+            <br className="hidden md:block" /> with your department colleagues.
+          </p>
+          <div className="pt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link href="/dashboard/timetable" className="apple-button-primary shadow-sm inline-flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              View Timetable
+            </Link>
+            <Link href="/dashboard/assignments" className="apple-button-secondary inline-flex items-center gap-2">
+              <ClipboardList className="h-4 w-4" />
+              Assignments
+            </Link>
+            <Link href="/dashboard/chat" className="apple-button-secondary inline-flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </Link>
           </div>
         </div>
 

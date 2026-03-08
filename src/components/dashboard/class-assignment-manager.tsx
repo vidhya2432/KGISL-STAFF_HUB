@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection, addDoc, deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, serverTimestamp, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 import { 
   Select,
   SelectContent,
@@ -104,6 +104,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   }, [db, classId]);
   const { data: assignments = [] } = useCollection<Assignment>(assignmentsQuery);
 
+  // Live Firestore subscription for submissions of the active assignment
+  const submissionsQuery = useMemo(() => {
+    if (!db || !classId || !activeAssignmentId) return null;
+    return collection(db, 'classes', classId, 'assignments', activeAssignmentId, 'submissions');
+  }, [db, classId, activeAssignmentId]);
+  const { data: firestoreSubmissions = [] } = useCollection<StudentSubmission>(submissionsQuery);
+
   const [syllabusInput, setSyllabusInput] = useState('');
   const [isImageUpload, setIsImageUpload] = useState(false);
   const [assignmentType, setAssignmentType] = useState<string>('');
@@ -111,7 +118,6 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   const [teamSize, setTeamSize] = useState<number>(3);
   
   const [activeAssignmentId, setActiveAssignmentId] = useState<string>('');
-  const [submissionsMap, setSubmissionsMap] = useState<Record<string, StudentSubmission[]>>({});
   
   const [isSyncing, setIsSyncing] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -226,7 +232,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
     try {
       const response = await syncFromDriveAction(classId, activeAssignmentId, driveLink, roster.map(s => ({ id: s.id, name: s.name, roll: s.roll })));
       if (response.success && response.data) {
-        setSubmissionsMap(prev => ({ ...prev, [activeAssignmentId]: response.data as StudentSubmission[] }));
+        // Write submissions to Firestore
+        const batch = writeBatch(db);
+        for (const sub of response.data) {
+          const subRef = doc(collection(db, 'classes', classId, 'assignments', activeAssignmentId, 'submissions'));
+          batch.set(subRef, sub);
+        }
+        await batch.commit();
         setIsDriveDialogOpen(false);
         setDriveLink('');
         toast({ title: 'Sync Complete', description: `Processed submissions for ${response.data.length} students.` });
@@ -307,7 +319,13 @@ export function ClassAssignmentManager({ classId }: { classId: string }) {
   };
 
   const activeAssignment = assignments.find(a => a.id === activeAssignmentId);
-  const activeSubmissions = activeAssignmentId ? (submissionsMap[activeAssignmentId] || (activeAssignment?.grouping === 'Individual' ? roster.map(s => ({ studentId: s.id, studentName: s.name, rollNumber: s.roll, status: 'Pending', submittedAt: null, marks: null, plagiarismScore: null, fileName: null, aiFeedback: null })) : [])) : [];
+  const activeSubmissions = activeAssignmentId 
+    ? (firestoreSubmissions.length > 0 
+        ? firestoreSubmissions 
+        : (activeAssignment?.grouping === 'Individual' 
+            ? roster.map(s => ({ studentId: s.id, studentName: s.name, rollNumber: s.roll, status: 'Pending', submittedAt: null, marks: null, plagiarismScore: null, fileName: null, aiFeedback: null })) 
+            : [])) 
+    : [];
 
   return (
     <div className="space-y-6">

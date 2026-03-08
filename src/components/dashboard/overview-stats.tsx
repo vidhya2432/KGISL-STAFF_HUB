@@ -2,18 +2,35 @@
 
 import { Users, BookCopy, AlertCircle } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, query, collectionGroup } from 'firebase/firestore';
+import { useMemo } from 'react';
 
 export function OverviewStats() {
   const db = useFirestore();
   const { data: classes } = useCollection(db ? collection(db, 'classes') : null);
-  
+
+  // Count all students across all classes
+  const studentsQuery = useMemo(() => {
+    if (!db) return null;
+    return collectionGroup(db, 'students');
+  }, [db]);
+  const { data: allStudents } = useCollection(studentsQuery);
+
+  // Count all assignments across all classes
+  const assignmentsQuery = useMemo(() => {
+    if (!db) return null;
+    return collectionGroup(db, 'assignments');
+  }, [db]);
+  const { data: allAssignments } = useCollection(assignmentsQuery);
+
   const activeCoursesCount = classes?.length || 0;
+  const totalStudents = allStudents?.length || 0;
+  const pendingAssignments = allAssignments?.length || 0;
 
   const stats = [
-    { label: 'Total Students', value: '142', icon: Users, description: 'Active participants' },
+    { label: 'Total Students', value: totalStudents.toString(), icon: Users, description: 'Active participants' },
     { label: 'Active Courses', value: activeCoursesCount.toString(), icon: BookCopy, description: 'Current semester' },
-    { label: 'Pending Assignments', value: '12', icon: AlertCircle, description: 'Due this week' },
+    { label: 'Assignments', value: pendingAssignments.toString(), icon: AlertCircle, description: 'Across all classes' },
   ];
 
   return (

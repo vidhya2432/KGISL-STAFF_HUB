@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Download, User, TrendingUp } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface Student {
   id: string;
@@ -17,6 +17,11 @@ interface Student {
 interface Assignment {
   id: string;
   title: string;
+}
+
+interface SubmissionDoc {
+  studentId: string;
+  marks: number | null;
 }
 
 export function PerformanceTable({ classId }: { classId: string }) {
@@ -33,14 +38,53 @@ export function PerformanceTable({ classId }: { classId: string }) {
   const { data: students = [] } = useCollection<Student>(studentsQuery);
   const { data: assignments = [] } = useCollection<Assignment>(assignmentsQuery);
 
+  // Fetch all submissions across all assignments for this class
+  const [submissionsMap, setSubmissionsMap] = useState<Record<string, Record<string, number | null>>>({});
+
+  useEffect(() => {
+    if (!db || assignments.length === 0) {
+      setSubmissionsMap({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const map: Record<string, Record<string, number | null>> = {};
+      for (const a of assignments) {
+        try {
+          const snap = await getDocs(collection(db, 'classes', classId, 'assignments', a.id, 'submissions'));
+          snap.docs.forEach((d) => {
+            const data = d.data() as SubmissionDoc;
+            if (data.studentId) {
+              if (!map[data.studentId]) map[data.studentId] = {};
+              map[data.studentId][a.id] = data.marks ?? null;
+            }
+          });
+        } catch {}
+      }
+      if (!cancelled) setSubmissionsMap(map);
+    })();
+    return () => { cancelled = true; };
+  }, [db, classId, assignments]);
+
+  const getStudentAverage = (studentId: string): string => {
+    const grades = submissionsMap[studentId];
+    if (!grades) return '—';
+    const values = Object.values(grades).filter((v): v is number => v !== null);
+    if (values.length === 0) return '—';
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+  };
+
   const handleExport = () => {
-    const headers = ["Student Name", "Roll Number", ...assignments.map(a => a.title), "Average %"];
+    const headers = ["Student Name", "Roll Number", ...assignments.map(a => a.title), "Average"];
     const csvContent = [
       headers.join(","),
       ...students.map(s => {
-        // In a real app, we'd fetch individual grades here
-        const mockAverage = (Math.random() * 30 + 70).toFixed(1);
-        return [s.name, s.roll, ...assignments.map(() => 'N/A'), `${mockAverage}%`].join(",");
+        const grades = assignments.map(a => {
+          const grade = submissionsMap[s.id]?.[a.id];
+          return grade !== null && grade !== undefined ? String(grade) : 'N/A';
+        });
+        const avg = getStudentAverage(s.id);
+        return [s.name, s.roll, ...grades, avg === '—' ? 'N/A' : `${avg}%`].join(",");
       })
     ].join("\n");
 
@@ -92,15 +136,21 @@ export function PerformanceTable({ classId }: { classId: string }) {
                   </div>
                 </TableCell>
                 {assignments.map(a => (
-                  <TableCell key={a.id} className="text-sm text-[#86868b] italic">
-                    Pending
+                  <TableCell key={a.id} className="text-sm text-[#1d1d1f]">
+                    {submissionsMap[student.id]?.[a.id] !== null && submissionsMap[student.id]?.[a.id] !== undefined
+                      ? submissionsMap[student.id][a.id]
+                      : <span className="italic text-[#86868b]">Pending</span>}
                   </TableCell>
                 ))}
                 <TableCell className="text-right pr-8">
-                  <div className="flex items-center justify-end gap-2">
-                    <TrendingUp className="h-3 w-3 text-[#34c759]" />
-                    <span className="font-bold text-[#1d1d1f] text-base">{(Math.random() * 20 + 75).toFixed(1)}%</span>
-                  </div>
+                  {getStudentAverage(student.id) !== '—' ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <TrendingUp className="h-3 w-3 text-[#34c759]" />
+                      <span className="font-bold text-[#1d1d1f] text-base">{getStudentAverage(student.id)}%</span>
+                    </div>
+                  ) : (
+                    <span className="text-[#86868b] italic text-sm">—</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

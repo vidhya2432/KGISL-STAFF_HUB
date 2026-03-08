@@ -3,6 +3,7 @@ import { Alegreya } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
+import { AuthProvider } from '@/lib/auth-context';
 
 const alegreya = Alegreya({
   subsets: ['latin'],
@@ -10,8 +11,8 @@ const alegreya = Alegreya({
 });
 
 export const metadata: Metadata = {
-  title: 'AcademiaLink',
-  description: 'A centralized platform for faculty to manage academic activities.',
+  title: 'KGISL Staff Hub',
+  description: 'A centralized platform for KGISL faculty to manage academic activities.',
 };
 
 export default function RootLayout({
@@ -27,7 +28,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@400;500;700&display=swap" rel="stylesheet" />
       </head>
       <body className={cn('font-body antialiased', alegreya.variable)} suppressHydrationWarning>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Toaster />
       </body>
     </html>
